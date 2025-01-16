@@ -7,9 +7,12 @@ import ngrok from 'ngrok';
 import { setupWebhook } from "./services/webex";
 
 const app = express();
+
+// Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -49,7 +52,15 @@ server.listen(port, async () => {
       });
       console.log(`ngrok tunnel established at: ${url}`);
       
-      await setupWebhook(url + '/api/webhook');
+      // Set up webhook with delay to ensure server is ready
+      setTimeout(async () => {
+        try {
+          await setupWebhook(url + '/api/webhook');
+          console.log('Webhook setup completed');
+        } catch (error) {
+          console.error('Failed to set up webhook:', error);
+        }
+      }, 5000);
     } catch (error) {
       console.error('Failed to establish ngrok tunnel:', error);
     }
