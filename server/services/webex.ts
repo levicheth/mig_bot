@@ -1,20 +1,21 @@
+// Import environment setup first
+import '../lib/setup-env';
+
 import Webex from 'webex';
 import { config } from '../config';
-import { DOMParser } from 'xmldom';
 
-// Configure Node.js environment
-if (typeof window === 'undefined') {
-  (global as any).window = {
-    location: {
-      protocol: 'https:',
-      hostname: 'localhost',
-    },
-  };
-  (global as any).DOMParser = DOMParser;
-  (global as any).WebSocket = require('ws');
+// Declare module for Webex
+declare module 'webex' {
+  export default class Webex {
+    constructor(config: any);
+    messages: any;
+    people: any;
+    webhooks: any;
+    register(): Promise<void>;
+  }
 }
 
-// Configure Node.js environment
+// Configure Webex SDK
 process.env.WEBEX_LOG_LEVEL = 'debug';
 process.env.WEBEX_INTERNAL_LOG_LEVEL = 'debug';
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';

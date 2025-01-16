@@ -14,8 +14,6 @@ export const config = {
   },
   ngrok: {
     authtoken: process.env.NGROK_AUTH_TOKEN,
-    // Will be set dynamically when ngrok tunnel is created
-    publicUrl: '',
   }
 };
 

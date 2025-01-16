@@ -4,7 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx server/index.ts",
+    "dev": "NODE_ENV=development tsx --require dotenv/config server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
@@ -55,6 +55,7 @@
     "express-session": "^1.18.1",
     "framer-motion": "^11.13.1",
     "input-otp": "^1.2.4",
+    "jsdom": "^24.0.0",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
     "ngrok": "^5.0.0-beta.2",
@@ -95,7 +96,9 @@
     "tailwindcss": "^3.4.14",
     "tsx": "^4.19.1",
     "typescript": "5.6.3",
-    "vite": "^5.4.9"
+    "vite": "^5.4.9",
+    "@types/jsdom": "^21.1.6",
+    "@types/xmldom": "^0.1.34"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

@@ -1,6 +1,7 @@
+import './lib/setup-env';
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
 import { config } from "./config";
 import ngrok from 'ngrok';
 import { setupWebhook } from "./services/webex";
@@ -27,62 +28,32 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+      console.log(logLine);
     }
   });
 
   next();
 });
 
-(async () => {
-  try {
-    const server = registerRoutes(app);
+const server = registerRoutes(app);
 
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
+const port = config.server.port || 5000;
+server.listen(port, async () => {
+  console.log(`Server listening on port ${port}`);
 
-      res.status(status).json({ message });
-      throw err;
-    });
-
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
+  if (process.env.NODE_ENV !== 'production' && config.ngrok.authtoken) {
+    try {
+      const url = await ngrok.connect({
+        addr: port,
+        authtoken: config.ngrok.authtoken,
+      });
+      console.log(`ngrok tunnel established at: ${url}`);
+      
+      await setupWebhook(url + '/api/webhook');
+    } catch (error) {
+      console.error('Failed to establish ngrok tunnel:', error);
     }
-
-    const PORT = config.server.port;
-    server.listen(PORT, config.server.host, async () => {
-      log(`Server listening on port ${PORT}`);
-
-      try {
-        // Setup ngrok tunnel
-        if (config.ngrok.authtoken) {
-          const publicUrl = await ngrok.connect({
-            addr: PORT,
-            authtoken: config.ngrok.authtoken
-          });
-          config.ngrok.publicUrl = publicUrl;
-          log(`ngrok tunnel established at: ${publicUrl}`);
-
-          // Register Webex webhook with the public URL
-          await setupWebhook(`${publicUrl}/api/webhook`);
-          log('Webex webhook registered successfully');
-        } else {
-          log('Ngrok authtoken not provided, webhook registration skipped');
-        }
-      } catch (error) {
-        console.error('Failed to setup ngrok or register webhook:', error);
-      }
-    });
-  } catch (error) {
-    console.error('Server startup failed:', error);
-    process.exit(1);
   }
-})();
+});
+
+export default app;
