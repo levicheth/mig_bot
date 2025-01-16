@@ -18,29 +18,23 @@ def main():
         me = api.people.me()
         print(f"Bot {me.displayName} is ready to echo messages")
 
-        # Get all rooms where our bot is in
-        rooms = list(api.rooms.list())
-        print(f"Bot is in {len(rooms)} rooms")
-
         while True:
             try:
                 # Get messages from all rooms
-                for room in rooms:
-                    messages = list(api.messages.list(roomId=room.id, max=1))
+                messages = api.messages.list(max=1)  # Get just the latest message
+                for msg in messages:
+                    # Don't respond to our own messages
+                    if msg.personEmail == me.emails[0]:
+                        continue
 
-                    for msg in messages:
-                        # Don't respond to our own messages
-                        if msg.personEmail == me.emails[0]:
-                            continue
+                    print(f"Received message from {msg.personEmail}: {msg.text}")
 
-                        print(f"Received message from {msg.personEmail}: {msg.text}")
-
-                        # Echo the message back
-                        api.messages.create(
-                            roomId=room.id,
-                            text=f"Echo: {msg.text}"
-                        )
-                        print(f"Sent echo response")
+                    # Echo the message back
+                    api.messages.create(
+                        roomId=msg.roomId,
+                        text=f"Echo: {msg.text}"
+                    )
+                    print(f"Sent echo response")
 
                 # Sleep to prevent hitting rate limits
                 time.sleep(1)
