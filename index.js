@@ -7,7 +7,11 @@ var bodyParser = require("body-parser");
 const fs = require('fs');
 const path = require('path');
 const csv = require('csv');
-const { processQuote } = require('./logic/bombot_cnc7.js');
+
+const { processQuote } = require('./logic/CNC7/bombot_cnc7.js');
+const deviceMapping = require('./logic/CNC7/device-mapping');
+const { downloadFile, uploadFile } = require('./logic/R2CCW/file-handler');
+const { logAudit, STATUS } = require('./logic/R2CCW/audit.js');
 
 var app = express();
 app.use(bodyParser.json());
@@ -89,40 +93,6 @@ framework.on("log", (msg) => {
 // specifies priority.   If multiple handlers match they will all be called unless the priority
 // was specified, in which case, only the handler(s) with the lowest priority will be called
 
-/* On mention with command
-ex User enters @botname framework, the bot will write back in markdown
-*/
-framework.hears(
-  "framework",
-  (bot) => {
-    console.log("framework command received");
-    bot.say(
-      "markdown",
-      "The primary purpose for the [webex-node-bot-framework](https://github.com/WebexCommunity/webex-node-bot-framework) was to create a framework based on the [webex-jssdk](https://webex.github.io/webex-js-sdk) which continues to be supported as new features and functionality are added to Webex. This version of the project was designed with two themes in mind: \n\n\n * Mimimize Webex API Calls. The original flint could be quite slow as it attempted to provide bot developers rich details about the space, membership, message and message author. This version eliminates some of that data in the interests of efficiency, (but provides convenience methods to enable bot developers to get this information if it is required)\n * Leverage native Webex data types. The original flint would copy details from the webex objects such as message and person into various flint objects. This version simply attaches the native Webex objects. This increases the framework's efficiency and makes it future proof as new attributes are added to the various webex DTOs "
-    );
-  },
-  "**framework**: (learn more about the Webex Bot Framework)",
-  0
-);
-
-/* On mention with command, using other trigger data, can use lite markdown formatting
-ex User enters @botname 'info' phrase, the bot will provide personal details
-*/
-framework.hears(
-  "info",
-  (bot, trigger) => {
-    console.log("info command received");
-    //the "trigger" parameter gives you access to data about the user who entered the command
-    let personAvatar = trigger.person.avatar;
-    let personEmail = trigger.person.emails[0];
-    let personDisplayName = trigger.person.displayName;
-    let outputString = `Here is your personal information: \n\n\n **Name:** ${personDisplayName}  \n\n\n **Email:** ${personEmail} \n\n\n **Avatar URL:** ${personAvatar}`;
-    bot.say("markdown", outputString);
-  },
-  "**info**: (get your personal details)",
-  0
-);
-
 /* On mention with bot data
 ex User enters @botname 'space' phrase, the bot will provide details about that particular space
 */
@@ -178,71 +148,6 @@ framework.hears(
   0
 );
 
-// Buttons & Cards data
-let cardJSON = {
-  $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-  type: "AdaptiveCard",
-  version: "1.0",
-  body: [
-    {
-      type: "ColumnSet",
-      columns: [
-        {
-          type: "Column",
-          width: "5",
-          items: [
-            {
-              type: "Image",
-              url: "Your avatar appears here!",
-              size: "large",
-              horizontalAlignment: "Center",
-              style: "person",
-            },
-            {
-              type: "TextBlock",
-              text: "Your name will be here!",
-              size: "medium",
-              horizontalAlignment: "Center",
-              weight: "Bolder",
-            },
-            {
-              type: "TextBlock",
-              text: "And your email goes here!",
-              size: "small",
-              horizontalAlignment: "Center",
-              isSubtle: true,
-              wrap: false,
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
-
-/* On mention with card example
-ex User enters @botname 'card me' phrase, the bot will produce a personalized card - https://developer.webex.com/docs/api/guides/cards
-*/
-framework.hears(
-  "card me",
-  (bot, trigger) => {
-    console.log("someone asked for a card");
-    let avatar = trigger.person.avatar;
-
-    cardJSON.body[0].columns[0].items[0].url = avatar
-      ? avatar
-      : `${config.webhookUrl}/missing-avatar.jpg`;
-    cardJSON.body[0].columns[0].items[1].text = trigger.person.displayName;
-    cardJSON.body[0].columns[0].items[2].text = trigger.person.emails[0];
-    bot.sendCard(
-      cardJSON,
-      "This is customizable fallback text for clients that do not support buttons & cards"
-    );
-  },
-  "**card me**: (a cool card!)",
-  0
-);
-
 /* On mention reply example
 ex User enters @botname 'reply' phrase, the bot will post a threaded reply
 */
@@ -281,7 +186,7 @@ framework.hears(
       .catch((e) => console.error(`Problem in help handler: ${e.message}`));
   },
   "**help**: (what you are reading now)\n" +
-  "**bom**: (paste device list to generate CNC v7.0 BoM, example:\nBOM\n8101-32H 1\n8102-64H 2)",
+  "**bom**: (paste device list to generate CNC v7.0 BoM, example:\nBOM\n8101-32H,1 8102-64H,2)",
   0
 );
 
@@ -313,6 +218,61 @@ framework.hears(
     console.log("=== BOM Processing End ===\n");
   },
   "**bom**: (paste device list to generate CNC v7.0 BoM, example: BOM 8101-32H,1 8102-64H,2)",
+  0
+);
+
+// Add CCWR2CCW handler
+framework.hears(
+  /^CCWR2CCW/im,
+  async (bot, trigger) => {
+    console.log("\n=== CCWR2CCW Processing Start ===");
+    console.log("Message:", trigger.message);
+    
+    const user = trigger.person.emails[0];
+    
+    try {
+      // Check if we have a file
+      if (!trigger.message.files || trigger.message.files.length === 0) {
+        logAudit(user, 'CCWR2CCW', STATUS.ISSUE, 'No file attached');
+        throw new Error('Please attach a CSV file');
+      }
+
+      // Get first file
+      const fileUrl = trigger.message.files[0];
+      console.log("File URL:", fileUrl);
+      
+      // Download file content using proper token from env
+      const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user);
+      console.log("Got file content, length:", fileContent.length);
+
+      // Process the file
+      const { processCSVFile } = require('./logic/R2CCW/ccwr2ccw.js');
+      const processedContent = await processCSVFile(fileContent);
+      console.log("Processed CSV file");
+
+      // Upload processed file
+      await uploadFile(bot, trigger.message.roomId, processedContent, user);
+      console.log("Sent processed file back to user");
+
+      // Log successful processing
+      logAudit(user, 'CCWR2CCW', STATUS.OK, `Processed ${fileContent.length} bytes`);
+
+    } catch (error) {
+      console.error("Error processing CCWR2CCW:", error);
+      logAudit(user, 'CCWR2CCW', STATUS.ERROR, error.message);
+      
+      bot.say('markdown', 
+        `Error: ${error.message}\n\n` +
+        `Please attach a CSV file with your request:\n` +
+        `\`\`\`\n` +
+        `CCWR2CCW\n` +
+        `[attach your CSV file]\n` +
+        `\`\`\``
+      );
+    }
+    console.log("=== CCWR2CCW Processing End ===\n");
+  },
+  "**ccwr2ccw**: (attach CSV file to process and get Est12345.csv back)",
   0
 );
 
@@ -351,83 +311,3 @@ process.on("SIGINT", () => {
     process.exit();
   });
 });
-
-// Simple device type to license type mapping
-const deviceMapping = {
-  '8101-32H': 'Type B',
-  '8102-64H': 'Type B',
-  '8101-32FH': 'Type B',
-  '8111-32EH': 'Type C',
-  '8201-24H8FH': 'Type A',
-  '8201-SYS': 'Type B',
-  '8201-32FH': 'Type B',
-  '8202-32FH-M': 'Type B',
-  '8202-SYS': 'Type B',
-  '8211-32FH-M': 'Type B',
-  '8212-48FH-M': 'Type C',
-  '8608': 'Type B',
-  '8711-32FH-M': 'Type B',
-  '8712': 'Type B',
-  '8804': 'Type C',
-  '8808': 'Type C',
-  '8812': 'Type C',
-  '8818': 'Type C'
-};
-
-// Simplified BOM processing function
-async function processBomInput(inputText) {
-  try {
-    // Process input lines - split on newlines first
-    const lines = inputText.split('\n')
-      .filter(line => line.trim())  // Remove empty lines
-      .slice(1);  // Skip the "BOM" line
-
-    console.log('Processing input lines:', lines);
-
-    const cncTypeGroups = new Map();
-
-    for (const line of lines) {
-      // Split on comma or semicolon
-      const parts = line.trim().split(/[,;]+/);
-      if (parts.length < 2) continue;
-
-      const deviceType = parts[0].trim();
-      const count = parseInt(parts[1]);
-
-      console.log(`Processing line - Device: ${deviceType}, Count: ${count}`);
-
-      if (!deviceType || isNaN(count) || count <= 0) {
-        console.log(`Skipping invalid line: ${line}`);
-        continue;
-      }
-
-      const cncType = deviceMapping[deviceType];
-      if (!cncType) {
-        throw new Error(`Device type not found: ${deviceType}`);
-      }
-
-      console.log(`Mapped ${deviceType} to ${cncType}`);
-      
-      // Add to group totals
-      cncTypeGroups.set(
-        cncType,
-        (cncTypeGroups.get(cncType) || 0) + count
-      );
-    }
-
-    if (cncTypeGroups.size === 0) {
-      throw new Error('No valid device entries found');
-    }
-
-    // Convert to output format and return array
-    return Array.from(cncTypeGroups.entries())
-      .map(([type, qty]) => ({
-        Type: type,
-        Qty: qty
-      }));
-
-  } catch (error) {
-    console.error('BOM Processing Error:', error);
-    throw new Error(`Error processing BOM: ${error.message}`);
-  }
-}
