@@ -242,20 +242,20 @@ framework.hears(
       console.log("File URL:", fileUrl);
       
       // Download file content using proper token from env
-      const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user);
-      console.log("Got file content, length:", fileContent.length);
+      const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
+      console.log("File downloaded");
 
       // Process the file
       const { processCSVFile } = require('./logic/R2CCW/ccwr2ccw.js');
       const processedContent = await processCSVFile(fileContent);
-      console.log("Processed CSV file");
+      console.log("File processed");
 
       // Upload processed file
       await uploadFile(bot, trigger.message.roomId, processedContent, user);
-      console.log("Sent processed file back to user");
+      console.log("File uploaded to user");
 
-      // Log successful processing
-      logAudit(user, 'CCWR2CCW', STATUS.OK, `Processed ${fileContent.length} bytes`);
+      // Log successful processing without content length
+      logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully');
 
     } catch (error) {
       console.error("Error processing CCWR2CCW:", error);
