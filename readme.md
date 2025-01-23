@@ -1,14 +1,11 @@
 # Webex Teams Bot
-
 A Node.js/Express server implementing a Webex Teams bot with webhook integration.
+https://github.com/WebexCommunity/webex-node-bot-framework
 
 # Limitations
 
 - Select all lines and press "Validate" button
-- The bot is not able to handle CCWR quote with SIA-1M licenses
 - If EPNM lic present, you must hit "Edit" > "Save" to validate the line
-
-
 
 
 ## Overview

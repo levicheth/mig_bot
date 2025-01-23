@@ -9,7 +9,7 @@ const path = require('path');
 const csv = require('csv');
 
 const { processQuote } = require('./logic/CNC7/bombot_cnc7.js');
-const deviceMapping = require('./logic/CNC7/device-mapping');
+const deviceMapping = require('./logic/CNC7/devMapCNC7Raw.js');
 const { downloadFile, uploadFile } = require('./logic/R2CCW/file-handler');
 const { logAudit, STATUS } = require('./logic/R2CCW/audit.js');
 
