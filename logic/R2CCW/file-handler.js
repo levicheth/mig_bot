@@ -73,7 +73,7 @@ async function downloadFile(fileUrl, accessToken, user, bot, roomId) {
   }
 }
 
-async function uploadFile(bot, roomId, content, user, filename = null) {
+async function uploadFile(bot, roomId, processedResult, user, filename = null) {
   try {
     // Generate filename if not provided
     const outputFilename = filename || generateFilename(user);
@@ -82,13 +82,13 @@ async function uploadFile(bot, roomId, content, user, filename = null) {
     
     // Create temporary file
     const tempFile = path.join(__dirname, `temp_${Date.now()}.xlsx`);
-    fs.writeFileSync(tempFile, content);
+    fs.writeFileSync(tempFile, processedResult.buffer);
     
     try {
       // Create form data
       const form = new FormData();
       form.append('roomId', roomId);
-      form.append('text', 'Here is your processed file:');
+      form.append('text', `Here is your Estimate Excel file.\nYou have saved ${processedResult.timeSaved} minutes of time. Not bad :)`);
       form.append('files', fs.createReadStream(tempFile), {
         filename: outputFilename,
         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

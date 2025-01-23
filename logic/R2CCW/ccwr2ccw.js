@@ -1,6 +1,7 @@
 const fs = require('fs');
 const csv = require('csv');
 const XLSX = require('xlsx');
+const { logR2CCW } = require('./r2ccw-logger');
 
 // Preprocess CSV content to find and extract data starting with header
 function preprocessCSV(content) {
@@ -35,7 +36,7 @@ function preprocessCSV(content) {
   }
 }
 
-// Calculate duration between dates in months
+// Calculate duration between dates in months with ceiling / roundup
 function calculateDuration(startDate, endDate) {
   if (!startDate || !endDate) return 0;
   
@@ -43,11 +44,23 @@ function calculateDuration(startDate, endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     
-    // Calculate months difference
-    const months = (end.getFullYear() - start.getFullYear()) * 12 + 
-                  (end.getMonth() - start.getMonth());
+    // Calculate months difference including partial months
+    const yearDiff = end.getFullYear() - start.getFullYear();
+    const monthDiff = end.getMonth() - start.getMonth();
+    const dayDiff = end.getDate() - start.getDate();
     
-    return Math.max(0, months);  // Ensure non-negative
+    // Calculate total months with decimals
+    let months = yearDiff * 12 + monthDiff;
+    
+    // Add partial month if there are remaining days
+    if (dayDiff > 0) {
+      const daysInMonth = new Date(end.getFullYear(), end.getMonth(), 0).getDate();
+      months += dayDiff / daysInMonth;
+    }
+    
+    // Round up to nearest integer and ensure non-negative
+    return Math.max(0, Math.ceil(months));
+    
   } catch (error) {
     console.error('Date calculation error:', error.message);
     return 0;
@@ -68,7 +81,50 @@ function calcReqStartDate() {
   return `${month}/${day}/${year}`;
 }
 
-async function processCSVFile(fileContent) {
+// Convert records to XLSX buffer
+function convertToXLSX(records) {
+  try {
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Convert records to worksheet
+    const ws = XLSX.utils.json_to_sheet(records, {
+      header: [
+        'Part Number',
+        'Quantity',
+        'Duration (Mnths)',
+        'List Price',
+        'Discount %',
+        'Initial Term(Months)',
+        'Auto Renew Term(Months)',
+        'Billing Model',
+        'Requested Start Date',
+        'Notes'
+      ]
+    });
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+    // Generate buffer
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  } catch (error) {
+    console.error('XLSX conversion error:', error.message);
+    throw new Error('Failed to convert to Excel format');
+  }
+}
+
+// Count lines in transformed records
+function countOutputLines(records) {
+  return records.length;
+}
+
+// Calculate time savings (0.5 mins per line)
+function calculateTimeSavings(lineCount) {
+  return lineCount * 0.5;
+}
+
+async function processCSVFile(fileContent, user, filename) {
   try {
     // Clean the input - first preprocess to find valid data
     const preprocessed = preprocessCSV(fileContent.toString());
@@ -96,7 +152,7 @@ async function processCSVFile(fileContent) {
         columns: true,
         skip_empty_lines: true,
         trim: true,
-        relaxColumnCount: true  // Add this to be more forgiving with malformed CSV
+        relaxColumnCount: true
       }, (err, data) => {
         if (err) reject(new Error('Invalid CSV format'));
         else resolve(data);
@@ -130,35 +186,24 @@ async function processCSVFile(fileContent) {
       };
     });
 
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    
-    // Convert records to worksheet
-    const ws = XLSX.utils.json_to_sheet(transformedRecords, {
-      header: [
-        'Part Number',
-        'Quantity',
-        'Duration (Mnths)',
-        'List Price',
-        'Discount %',
-        'Initial Term(Months)',
-        'Auto Renew Term(Months)',
-        'Billing Model',
-        'Requested Start Date',
-        'Notes'
-      ]
-    });
+    // Count lines and calculate savings
+    const lineCount = countOutputLines(transformedRecords);
+    const timeSaved = calculateTimeSavings(lineCount);
 
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-
-    // Generate buffer
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    // Convert to XLSX
+    const buffer = convertToXLSX(transformedRecords);
     
-    return buffer;
+    // Add line count to log
+    logR2CCW(user, filename, `file w ${lineCount} lines generated OK`);
+    
+    return {
+      buffer,
+      lineCount,
+      timeSaved
+    };
 
   } catch (error) {
-    console.error('CSV Processing Error:', error.message);  // Only log error message
+    console.error('CSV Processing Error:', error.message);
     throw error;
   }
 }

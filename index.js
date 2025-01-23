@@ -247,15 +247,15 @@ framework.hears(
 
       // Process the file
       const { processCSVFile } = require('./logic/R2CCW/ccwr2ccw.js');
-      const processedContent = await processCSVFile(fileContent);
+      const processedResult = await processCSVFile(fileContent, user, trigger.message.files[0].split('/').pop());
       console.log("File processed");
 
       // Upload processed file
-      await uploadFile(bot, trigger.message.roomId, processedContent, user);
+      await uploadFile(bot, trigger.message.roomId, processedResult, user);
       console.log("File uploaded to user");
 
-      // Log successful processing without content length
-      logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully');
+      // Log successful processing with line count
+      logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully', processedResult.lineCount);
 
     } catch (error) {
       console.error("Error processing CCWR2CCW:", error);

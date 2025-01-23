@@ -16,16 +16,15 @@ function generateRequestId() {
     .toUpperCase();
 }
 
-function logAudit(user, command, status, details = '') {
+function logAudit(user, command, status, message, lineCount = 0) {
   try {
     const timestamp = new Date().toISOString();
-    const requestId = generateRequestId();
-    const logLine = `${timestamp},${requestId},${user},${command},${status},${details}\n`;
+    const requestId = crypto.randomBytes(4).toString('hex').toUpperCase();
+    
+    const logLine = `${timestamp},${requestId},${user},${command},${status},${lineCount},${message}\n`;
     
     fs.appendFileSync(AUDIT_FILE, logLine);
-    console.log('Audit logged:', logLine.trim());
-    
-    return requestId;  // Return ID for reference
+    return requestId;
   } catch (error) {
     console.error('Failed to write audit log:', error);
     return null;
