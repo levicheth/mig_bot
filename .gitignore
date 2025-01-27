@@ -10,3 +10,4 @@ vite.config.ts.*
 .replit
 .env
 .png
+generated-icon.png
