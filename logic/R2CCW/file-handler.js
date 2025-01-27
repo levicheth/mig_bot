@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { logR2CCW } = require('./r2ccw-logger');
+const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
