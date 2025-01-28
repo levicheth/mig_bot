@@ -3,6 +3,7 @@ const csv = require('csv');
 const XLSX = require('xlsx');
 const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const { convertXLSXtoCSV } = require('./xlsx2csv');
+const { logAudit, STATUS } = require('../shared/audit/audit');
 
 // Count lines in transformed records
 function countOutputLines(records) {
@@ -89,7 +90,7 @@ async function normalizeInputToCSV(fileContent) {
       // Try converting from XLSX
       try {
         console.log('Not a valid CSV file, trying XLSX...');
-        const csvContent = await convertXLSXtoCSV(fileContent);
+        const csvContent = convertXLSXtoCSV(fileContent);
         console.log('Successfully converted XLSX to CSV');
         return csvContent;
       } catch (xlsxError) {
@@ -136,6 +137,72 @@ function getCSVBody(content) {
   }
 }
 
+// Extract quote information from CSV content
+function getCSVQuoteInfo(content) {
+  try {
+    // Split into lines
+    const lines = content.split('\n');
+    
+    // Initialize quote info
+    const quoteInfo = {
+      quoteNumber: '',
+      quotePrice: '',
+      quoteCurrency: ''
+    };
+    
+    // Look for quote information in first 15 lines
+    for (let i = 0; i < Math.min(lines.length, 15); i++) {
+      const line = lines[i].trim();
+      
+      // Extract Quote Number
+      if (line.includes('Quote Number')) {
+        console.log('Quote Number found in line:', line);
+        const index = line.indexOf('Quote Number') + 'Quote Number'.length;
+        const remaining = line.substring(index).trim();
+        if (remaining.startsWith(',')) {
+          // Get text between first and second comma
+          const parts = remaining.split(',');
+          if (parts.length > 1) {
+            quoteInfo.quoteNumber = parts[1].trim();
+          }
+        }
+      }
+      
+      // Extract Quote Extended List Price
+      if (line.includes('Quote Extended List Price')) {
+        console.log('Quote Extended List Price found in line:', line);
+        const index = line.indexOf('Quote Extended List Price') + 'Quote Extended List Price'.length;
+        const remaining = line.substring(index).trim();
+        quoteInfo.quotePrice = remaining.startsWith(',') ? 
+          remaining.substring(1).trim() : remaining.trim();
+      }
+
+      // Extract Quote Currency
+      if (line.includes('Quote Currency')) {
+        console.log('Quote Currency found in line:', line);
+        const index = line.indexOf('Quote Currency') + 'Quote Currency'.length;
+        const remaining = line.substring(index).trim();
+        quoteInfo.quoteCurrency = remaining.startsWith(',') ? 
+          remaining.substring(1).trim() : remaining.trim();
+      }
+      
+      // Break if we found all three
+      if (quoteInfo.quoteNumber && quoteInfo.quotePrice && quoteInfo.quoteCurrency) {
+        break;
+      }
+    }
+        
+    return quoteInfo;
+  } catch (error) {
+    console.error('Quote info extraction error:', error.message);
+    return {
+      quoteNumber: '',
+      quotePrice: '',
+      quoteCurrency: ''
+    };
+  }
+}
+
 // Convert records to XLSX buffer
 function convertToXLSXOutput(records) {
   try {
@@ -174,6 +241,13 @@ async function processCSVFile(fileContent, user, filename) {
   try {
     // First get CSV content regardless of input format
     const csvContent = await normalizeInputToCSV(fileContent);
+    
+    // Get quote info before preprocessing
+    const quoteInfo = getCSVQuoteInfo(csvContent);
+    console.log('\n=== Quote Info for Audit ===');
+    console.log('Quote Number:', quoteInfo.quoteNumber);
+    console.log('Quote Currency:', quoteInfo.quoteCurrency);
+    console.log('Quote Price:', quoteInfo.quotePrice);
     
     // Clean the input - first preprocess to find valid data
     const preprocessed = getCSVBody(csvContent);
@@ -242,17 +316,24 @@ async function processCSVFile(fileContent, user, filename) {
     // Convert to XLSX
     const buffer = convertToXLSXOutput(transformedRecords);
     
-    // Add line count to log
+    // Add line count to log with quote info
     logR2CCW(user, filename, `file w ${lineCount} lines generated OK`);
-    
+    logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully', lineCount, quoteInfo);
+
     return {
       buffer,
       lineCount,
-      timeSaved
+      timeSaved,
+      quoteInfo
     };
 
   } catch (error) {
     console.error('CSV Processing Error:', error.message);
+    logAudit(user, 'CCWR2CCW', STATUS.ERROR, error.message, 0, {
+      quoteNumber: '',
+      quoteCurrency: '',
+      quotePrice: ''
+    });
     throw error;
   }
 }

@@ -252,14 +252,17 @@ framework.hears(
 
       // Upload processed file
       await uploadFile(bot, trigger.message.roomId, processedResult, user);
-      console.log("File uploaded to user");
-
-      // Log successful processing with line count
-      logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully', processedResult.lineCount);
+      
+      // Single audit log entry with quote info
+      //logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully', processedResult.lineCount, processedResult.quoteInfo);
 
     } catch (error) {
       console.error("Error processing CCWR2CCW:", error);
-      logAudit(user, 'CCWR2CCW', STATUS.ERROR, error.message);
+      //logAudit(user, 'CCWR2CCW', STATUS.ERROR, error.message, 0, {
+      //  quoteNumber: '',
+      //  quoteCurrency: '',
+      //  quotePrice: ''
+      //});
       
       bot.say('markdown', 
         `Error: ${error.message}\n\n` +

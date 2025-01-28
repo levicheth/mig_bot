@@ -9,19 +9,12 @@ const STATUS = {
   ERROR: 'ERROR'
 };
 
-// Generate 8 char unique ID using hex characters
-function generateRequestId() {
-  return crypto.randomBytes(4)  // 4 bytes = 8 hex chars
-    .toString('hex')
-    .toUpperCase();
-}
-
-function logAudit(user, command, status, message, lineCount = 0) {
+function logAudit(user, command, status, message, lineCount = 0, quoteInfo = {}) {
   try {
     const timestamp = new Date().toISOString();
     const requestId = crypto.randomBytes(4).toString('hex').toUpperCase();
     
-    const logLine = `${timestamp},${requestId},${user},${command},${status},${lineCount},${message}\n`;
+    const logLine = `${timestamp},${requestId},${user},${command},${quoteInfo.quoteNumber},${quoteInfo.quoteCurrency},${quoteInfo.quotePrice},${status},${lineCount},${message}\n`;
     
     fs.appendFileSync(AUDIT_FILE, logLine);
     return requestId;

@@ -73,6 +73,31 @@ async function downloadFile(fileUrl, accessToken, user, bot, roomId) {
   }
 }
 
+// Helper function to send Webex messages
+async function uploadWxMsg(msgData) {
+  try {
+    const form = new FormData();
+    
+    // Add all form data
+    Object.entries(msgData).forEach(([key, value]) => {
+      form.append(key, value);
+    });
+
+    // Upload using Webex API
+    const response = await axios.post('https://webexapis.com/v1/messages', form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${process.env.BOTTOKEN}`
+      }
+    });
+
+    return response;
+  } catch (error) {
+    console.error('Webex message error:', error);
+    throw new Error('Failed to send Webex message');
+  }
+}
+
 async function uploadFile(bot, roomId, processedResult, user, filename = null) {
   try {
     // Generate filename if not provided
@@ -85,25 +110,24 @@ async function uploadFile(bot, roomId, processedResult, user, filename = null) {
     fs.writeFileSync(tempFile, processedResult.buffer);
     
     try {
-      // Create form data
-      const form = new FormData();
-      form.append('roomId', roomId);
-      form.append('text', `Here is your Estimate Excel file.\nYou have saved ${processedResult.timeSaved} minutes of time. Not bad :)`);
-      form.append('files', fs.createReadStream(tempFile), {
+      // Send file to user
+      const response = await uploadWxMsg({
+        roomId: roomId,
+        text: `Here is your Estimate Excel file.\nYou have saved ${processedResult.timeSaved} minutes of time. Not bad :)`,
+        files: fs.createReadStream(tempFile),
         filename: outputFilename,
         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
 
-      // Upload using Webex API directly with BOTTOKEN
-      const response = await axios.post('https://webexapis.com/v1/messages', form, {
-        headers: {
-          ...form.getHeaders(),
-          'Authorization': `Bearer ${process.env.BOTTOKEN}`
-        }
-      });
-      
       logR2CCW(user, outputFilename, `Upload URL: ${response.data.files?.[0] || 'No URL returned'}`);
       logR2CCW(user, outputFilename, 'File uploaded to user space');
+
+      // Send notification to admin
+      await uploadWxMsg({
+        toPersonEmail: 'allevich@cisco.com',
+        text: `User ${user} saved ${processedResult.timeSaved} minutes of time`
+      });
+
       
     } finally {
       // Clean up temp file
@@ -122,5 +146,6 @@ async function uploadFile(bot, roomId, processedResult, user, filename = null) {
 
 module.exports = {
   downloadFile,
-  uploadFile
+  uploadFile,
+  uploadWxMsg
 }; 
