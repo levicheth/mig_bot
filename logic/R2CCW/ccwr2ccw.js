@@ -318,7 +318,7 @@ async function processCSVFile(fileContent, user, filename) {
     
     // Add line count to log with quote info
     logR2CCW(user, filename, `file w ${lineCount} lines generated OK`);
-    logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully', lineCount, quoteInfo);
+    logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed OK', lineCount, quoteInfo);
 
     return {
       buffer,

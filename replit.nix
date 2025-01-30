@@ -1,5 +1,5 @@
 {pkgs}: {
   deps = [
-    pkgs.glibcLocales
+    pkgs.nodejs-20_x
   ];
 }

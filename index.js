@@ -19,6 +19,7 @@ app.use(express.static("images"));
 
 const config = {
   token: process.env.BOTTOKEN,
+  port: process.env.PORT || 5000
 };
 
 // Only pass the webhook URL and port if it has been set in the environment
