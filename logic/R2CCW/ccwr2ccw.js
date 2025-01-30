@@ -5,6 +5,39 @@ const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const { logAudit, STATUS } = require('../shared/audit/audit');
 const { countOutputLines, calculateTimeSavings, calcReqStartDate, calculateDuration, normalizeInputToCSV, getCSVQuoteInfo } = require('./r2-utils');
 
+// Convert records to XLSX buffer // NOK func, need to fix later
+function convertToXLSXOutput(records) {
+  try {
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Convert records to worksheet
+    const ws = XLSX.utils.json_to_sheet(records, {
+      header: [
+        'Part Number',
+        'Quantity',
+        'Duration (Mnths)',
+        'List Price',
+        'Discount %',
+        'Initial Term(Months)',
+        'Auto Renew Term(Months)',
+        'Billing Model',
+        'Requested Start Date',
+        'Notes'
+      ]
+    });
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+    // Generate buffer
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  } catch (error) {
+    console.error('XLSX conversion error:', error.message);
+    throw new Error('Failed to convert to Excel format');
+  }
+}
+
 // Preprocess CSV content to find and extract data starting with header
 function getCSVBody(content) {
   try {
@@ -35,39 +68,6 @@ function getCSVBody(content) {
   } catch (error) {
     console.error('Preprocessing error:', error.message);
     throw error;
-  }
-}
-
-// Convert records to XLSX buffer
-function convertToXLSXOutput(records) {
-  try {
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    
-    // Convert records to worksheet
-    const ws = XLSX.utils.json_to_sheet(records, {
-      header: [
-        'Part Number',
-        'Quantity',
-        'Duration (Mnths)',
-        'List Price',
-        'Discount %',
-        'Initial Term(Months)',
-        'Auto Renew Term(Months)',
-        'Billing Model',
-        'Requested Start Date',
-        'Notes'
-      ]
-    });
-
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-
-    // Generate buffer
-    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  } catch (error) {
-    console.error('XLSX conversion error:', error.message);
-    throw new Error('Failed to convert to Excel format');
   }
 }
 
@@ -118,10 +118,9 @@ async function processCSVFile(fileContent, user, filename) {
     
     // Get quote info - qwt #, NP, currency > Only for AUDIT file
     const quoteInfo = getCSVQuoteInfo(csvContent);
-    
-    // Clean the input - first preprocess to find valid data
+
     const preprocessed = getCSVBody(csvContent);
-    
+
     // Parse the quote body to get records
     const records = await parseQuoteBody(preprocessed);
 
@@ -133,9 +132,11 @@ async function processCSVFile(fileContent, user, filename) {
       const startDate = record.startDate || record['Start Date'] || '';
       const endDate = record.endDate || record['End Date'] || '';
       const duration = calculateDuration(startDate, endDate);
-      
+
       return {
-        'Part Number': record.pid || record['Product Number'] || '',
+        'Part Number': quoteInfo.quoteType === 'SW' 
+          ? (record.pid || record['Product Number'] || '')
+          : (record.sku || record['SKU'] || ''),
         'Quantity': parseInt(record.qty || record['Quantity'] || '1', 10),
         'Duration (Mnths)': '',
         'List Price': '',

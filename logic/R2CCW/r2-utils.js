@@ -112,7 +112,8 @@ try {
     const quoteInfo = {
     quoteNumber: '',
     quotePrice: '',
-    quoteCurrency: ''
+    quoteCurrency: '',
+    quoteType: 'UNDEFINED'  // Default to CX
     };
     
     // Look for quote information in first 15 lines
@@ -121,7 +122,6 @@ try {
     
     // Extract Quote Number
     if (line.includes('Quote Number')) {
-        console.log('Quote Number found in line:', line);
         const index = line.indexOf('Quote Number') + 'Quote Number'.length;
         const remaining = line.substring(index).trim();
         if (remaining.startsWith(',')) {
@@ -135,7 +135,6 @@ try {
     
     // Extract Quote Extended List Price
     if (line.includes('Quote Extended List Price')) {
-        console.log('Quote Extended List Price found in line:', line);
         const index = line.indexOf('Quote Extended List Price') + 'Quote Extended List Price'.length;
         const remaining = line.substring(index).trim();
         quoteInfo.quotePrice = remaining.startsWith(',') ? 
@@ -144,15 +143,32 @@ try {
 
     // Extract Quote Currency
     if (line.includes('Quote Currency')) {
-        console.log('Quote Currency found in line:', line);
         const index = line.indexOf('Quote Currency') + 'Quote Currency'.length;
         const remaining = line.substring(index).trim();
         quoteInfo.quoteCurrency = remaining.startsWith(',') ? 
         remaining.substring(1).trim() : remaining.trim();
     }
+
+    // Look for Service Type column and check for "SUB-" pattern
+    const headerIndex = lines.findIndex(line => 
+        line.toLowerCase().includes('service type')
+    );
+
+    if (headerIndex !== -1) {
+        // Check next line after header for "SUB-" pattern
+        const serviceTypeLine = lines[headerIndex + 1];
+        if (serviceTypeLine && serviceTypeLine.includes('SUB-')) {
+            quoteInfo.quoteType = 'SW';
+        } else if (serviceTypeLine && serviceTypeLine.includes('TS')) {
+            quoteInfo.quoteType = 'CX';
+        } else {
+            quoteInfo.quoteType = 'UNDEFINED';
+        }
+    }
     
-    // Break if we found all three
-    if (quoteInfo.quoteNumber && quoteInfo.quotePrice && quoteInfo.quoteCurrency) {
+    // Break if we found all four
+    if (quoteInfo.quoteNumber && quoteInfo.quotePrice && quoteInfo.quoteCurrency && quoteInfo.quoteType) {
+        console.log('Quote info extracted:', quoteInfo);
         break;
     }
     }
@@ -163,7 +179,8 @@ try {
     return {
     quoteNumber: '',
     quotePrice: '',
-    quoteCurrency: ''
+    quoteCurrency: '',
+    quoteType: 'UNDEFINED'  // Default to CX on error
     };
 }
 }
