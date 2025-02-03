@@ -24,6 +24,8 @@
   },
   "homepage": "https://github.com/tbd/webexbotstarter#readme",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.740.0",
+    "@aws-sdk/s3-presigned-post": "^3.740.0",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
     "@replit/vite-plugin-shadcn-theme-json": "^0.0.4",
     "@vitejs/plugin-react": "^4.3.4",

@@ -7,6 +7,15 @@ https://github.com/WebexCommunity/webex-node-bot-framework
 - Select all lines and press "Validate" button
 - If EPNM lic present, you must hit "Edit" > "Save" to validate the line
 
+# Local Development
+
+./node_modules/ngrok/bin/ngrok.exe http 5000
+
+- check ngrok url
+- update .env with ngrok url
+- run bot
+
+node index.js
 
 ## Overview
 
