@@ -19,7 +19,9 @@ app.use(express.static("images"));
 
 const config = {
   token: process.env.BOTTOKEN,
-  port: process.env.PORT || 5000
+  port: process.env.PORT || 5000,
+  messageFormat: 'text',
+  removeDeviceRegistrationProperties: true
 };
 
 // Only pass the webhook URL and port if it has been set in the environment
@@ -32,6 +34,31 @@ if (process.env.WEBHOOKURL && process.env.PORT) {
 // init framework
 var framework = new framework(config);
 framework.start();
+
+// Override showHelp method to remove framework signature
+framework.showHelp = function() {
+  let helpText = `Please use format:\n\n` +
+  `**ccwr2ccw**: \n` +
+  `- in CCWR tool, export quote as CSV format; NB. by default it's XLSX format, so you must change it,\n` +
+  `- type CCWR2CCW and add the CCWR quote in the same msg\n` +
+  `- wait for bot to respond with CCW Estimate in Excel format \n\n` ;
+
+  // Sort help items by priority if _helpMessages exists
+  const commands = this._commands || [];
+  commands.sort((a, b) => {
+    return (a.priority || 0) - (b.priority || 0);
+  });
+
+  // Build help string without framework signature
+  commands.forEach((cmd) => {
+    if (cmd.help) {
+      helpText += '• ' + cmd.help;
+    }
+  });
+  
+  return helpText;
+};
+
 console.log("Starting framework, please wait...");
 
 framework.on("initialized", () => {
@@ -109,9 +136,7 @@ framework.hears(
       .then(() => bot.say("markdown", framework.showHelp()))
       .catch((e) => console.error(`Problem in help handler: ${e.message}`));
   },
-  "**help**: (what you are reading now)\n" +
-  "**bom**: (paste device list to generate CNC v7.0 BoM, example:\nBOM\n8101-32H,1 8102-64H,2)",
-  0
+  "**help**: (what you are reading now)\n\n"
 );
 
 // Add BOM handler - matches both "BOM" alone and "BOM" followed by device list
@@ -198,19 +223,20 @@ framework.hears(
     }
     console.log("=== CCWR2CCW Processing End ===\n");
   },
-  "**ccwr2ccw**: (attach CSV file to process and get Est12345.csv back)",
-  0
+  "**ccwr2ccw**: (attach CSV file to process and get Est12345.csv back)\n\n"
+  
 );
 
 // Update the catch-all handler
 framework.hears(
   /.*/,
   (bot, trigger) => {
-    console.log(`catch-all handler fired for user input: ${trigger.text}`);
+    console.log(`catch-all handler fired for user input: ${trigger.text} \n\n`);
     bot
       .say(`Sorry, I don't know how to respond to "${trigger.text}"`)
       .then(() => bot.say("markdown", framework.showHelp()))
       .catch((e) =>
+
         console.error(`Problem in the unexpected command handler: ${e.message}`)
       );
   },
