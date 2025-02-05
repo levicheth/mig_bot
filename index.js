@@ -94,83 +94,6 @@ framework.on("log", (msg) => {
 // specifies priority.   If multiple handlers match they will all be called unless the priority
 // was specified, in which case, only the handler(s) with the lowest priority will be called
 
-/* On mention with bot data
-ex User enters @botname 'space' phrase, the bot will provide details about that particular space
-*/
-framework.hears(
-  "space",
-  (bot) => {
-    console.log("space. the final frontier");
-    let roomTitle = bot.room.title;
-    let spaceID = bot.room.id;
-    let roomType = bot.room.type;
-
-    let outputString = `The title of this space: ${roomTitle} \n\n The roomID of this space: ${spaceID} \n\n The type of this space: ${roomType}`;
-
-    console.log(outputString);
-    bot
-      .say("markdown", outputString)
-      .catch((e) => console.error(`bot.say failed: ${e.message}`));
-  },
-  "**space**: (get details about this space) ",
-  0
-);
-
-/*
-   Say hi to every member in the space
-   This demonstrates how developers can access the webex
-   sdk to call any Webex API.  API Doc: https://webex.github.io/webex-js-sdk/api/
-*/
-framework.hears(
-  "say hi to everyone",
-  (bot) => {
-    console.log("say hi to everyone.  Its a party");
-    // Use the webex SDK to get the list of users in this space
-    bot.webex.memberships
-      .list({ roomId: bot.room.id })
-      .then((memberships) => {
-        for (const member of memberships.items) {
-          if (member.personId === bot.person.id) {
-            // Skip myself!
-            continue;
-          }
-          let displayName = member.personDisplayName
-            ? member.personDisplayName
-            : member.personEmail;
-          bot.say(`Hello ${displayName}`);
-        }
-      })
-      .catch((e) => {
-        console.error(`Call to sdk.memberships.get() failed: ${e.messages}`);
-        bot.say("Hello everybody!");
-      });
-  },
-  "**say hi to everyone**: (everyone gets a greeting using a call to the Webex SDK)",
-  0
-);
-
-/* On mention reply example
-ex User enters @botname 'reply' phrase, the bot will post a threaded reply
-*/
-framework.hears(
-  "reply",
-  (bot, trigger) => {
-    console.log("someone asked for a reply.  We will give them two.");
-    bot.reply(
-      trigger.message,
-      "This is threaded reply sent using the `bot.reply()` method.",
-      "markdown"
-    );
-    var msg_attach = {
-      text: "This is also threaded reply with an attachment sent via bot.reply(): ",
-      file: "https://media2.giphy.com/media/dTJd5ygpxkzWo/giphy-downsized-medium.gif",
-    };
-    bot.reply(trigger.message, msg_attach);
-  },
-  "**reply**: (have bot reply to your message)",
-  0
-);
-
 /* On mention with command
 ex User enters @botname help, the bot will write back in markdown
  *
@@ -192,16 +115,16 @@ framework.hears(
 );
 
 // Add BOM handler - matches both "BOM" alone and "BOM" followed by device list
+
+/* CNC 7.0 BoM Handler
 framework.hears(
   /^BOM/im,
   async (bot, trigger) => {
-    console.log("\n=== BOM Processing Start ===");
-    console.log("Raw input:", trigger.text);
+
     
     try {
       // Process the raw input directly
       const result = await processQuote(trigger.text);
-      console.log("Result from processQuote:", result);
       
       // Send the result back to user
       bot.say('markdown', `Processed BOM Results:\n\`\`\`\n${result}\`\`\``);
@@ -216,13 +139,12 @@ framework.hears(
         `\`\`\``
       );
     }
-    console.log("=== BOM Processing End ===\n");
   },
-  "**bom**: (paste device list to generate CNC v7.0 BoM, example: BOM 8101-32H,1 8102-64H,2)",
   0
 );
+*/
 
-// Add CCWR2CCW handler
+// Add CCWR2CCW 
 framework.hears(
   /^CCWR2CCW/im,
   async (bot, trigger) => {
