@@ -37,25 +37,15 @@ framework.start();
 
 // Override showHelp method to remove framework signature
 framework.showHelp = function() {
-  let helpText = `Please use format:\n\n` +
+  let helpText = `Currently implemented services:\n\n` +
   `**ccwr2ccw**: \n` +
-  `- in CCWR tool, export quote as CSV format; NB. by default it's XLSX format, so you must change it,\n` +
+  `- in CCWR tool, export quote as CSV format; NB. by default it's XLSX format, so you must change it\n` +
   `- type CCWR2CCW and add the CCWR quote in the same msg\n` +
-  `- wait for bot to respond with CCW Estimate in Excel format \n\n` ;
+  `- wait for bot to respond with CCW Estimate in Excel format \n` +
+  `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
+  `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
+  `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` ;
 
-  // Sort help items by priority if _helpMessages exists
-  const commands = this._commands || [];
-  commands.sort((a, b) => {
-    return (a.priority || 0) - (b.priority || 0);
-  });
-
-  // Build help string without framework signature
-  commands.forEach((cmd) => {
-    if (cmd.help) {
-      helpText += '• ' + cmd.help;
-    }
-  });
-  
   return helpText;
 };
 

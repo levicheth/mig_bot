@@ -80,7 +80,7 @@ async function logAuditS3(user, command, status, message, lineCount = 0, quoteIn
     ].join(',') + '\n';
 
     // Get the S3 key for today's log file
-    const key = `audit_logs/${timestamp.split('T')[0]}/audit.log`;
+    const key = `audit_logs/audit.log`;
 
     try {
       // Try to get existing content
