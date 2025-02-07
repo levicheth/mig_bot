@@ -115,8 +115,7 @@ async function uploadFile(bot, roomId, processedResult, user, filename = null) {
         roomId: roomId,
         text: `Here is your Estimate Excel file.\nYou have saved ${processedResult.timeSaved} minutes of time. Not bad :)`,
         files: fs.createReadStream(tempFile),
-        filename: outputFilename,
-        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        filename: outputFilename        
       });
 
       logR2CCW(user, outputFilename, `Upload URL: ${response.data.files?.[0] || 'No URL returned'}`);
