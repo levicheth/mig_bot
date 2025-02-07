@@ -2,7 +2,6 @@ bak
 node_modules
 dist
 .DS_Store
-server/public
 vite.config.ts.*
 *.tar.gz
 **/*.log
@@ -10,4 +9,5 @@ vite.config.ts.*
 .replit
 .env
 .png
-generated-icon.png
+eng.traineddata
+.ocr-test.js

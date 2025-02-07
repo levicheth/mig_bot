@@ -1,42 +1,9 @@
 const fs = require('fs');
 const csv = require('csv');
-const XLSX = require('xlsx');
 const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const { logAudit, STATUS } = require('../shared/audit/audit');
+const { convertToXLSXOutput } = require('./file-conversion');
 const { countOutputLines, calculateTimeSavings, calcReqStartDate, calculateDuration, normalizeInputToCSV, getCSVQuoteInfo } = require('./r2-utils');
-
-// Convert records to XLSX buffer // NOK func, need to fix later
-function convertToXLSXOutput(records) {
-  try {
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    
-    // Convert records to worksheet
-    const ws = XLSX.utils.json_to_sheet(records, {
-      header: [
-        'Part Number',
-        'Quantity',
-        'Duration (Mnths)',
-        'List Price',
-        'Discount %',
-        'Initial Term(Months)',
-        'Auto Renew Term(Months)',
-        'Billing Model',
-        'Requested Start Date',
-        'Notes'
-      ]
-    });
-
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-
-    // Generate buffer
-    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  } catch (error) {
-    console.error('XLSX conversion error:', error.message);
-    throw new Error('Failed to convert to Excel format');
-  }
-}
 
 // Preprocess CSV content to find and extract data starting with header
 function getCSVBody(content) {
@@ -153,7 +120,7 @@ async function processCSVFile(fileContent, user, filename) {
     const lineCount = countOutputLines(transformedRecords);
     const timeSaved = calculateTimeSavings(lineCount);
 
-    // Convert to XLSX
+    // Convert to XLSX using the imported function
     const buffer = convertToXLSXOutput(transformedRecords);
     
     // Add line count to log with quote info

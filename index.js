@@ -8,10 +8,9 @@ const fs = require('fs');
 const path = require('path');
 const csv = require('csv');
 
-const { processQuote } = require('./logic/CNC7/bombot_cnc7.js');
-const deviceMapping = require('./logic/CNC7/devMapCNC7Raw.js');
 const { downloadFile, uploadFile } = require('./logic/R2CCW/file-handler');
 const { logAudit, STATUS } = require('./logic/shared/audit/audit.js');
+const { downloadImage, runOCR } = require('./logic/Any2CCW/ocr-proc.js');
 
 var app = express();
 app.use(bodyParser.json());
@@ -35,6 +34,12 @@ if (process.env.WEBHOOKURL && process.env.PORT) {
 var framework = new framework(config);
 framework.start();
 
+// Run test after framework initialization
+framework.on("initialized", () => {
+  console.log("framework is all fired up! [Press CTRL-C to quit]");
+  
+});
+
 // Override showHelp method to remove framework signature
 framework.showHelp = function() {
   let helpText = `Currently implemented services:\n\n` +
@@ -48,12 +53,6 @@ framework.showHelp = function() {
 
   return helpText;
 };
-
-console.log("Starting framework, please wait...");
-
-framework.on("initialized", () => {
-  console.log("framework is all fired up! [Press CTRL-C to quit]");
-});
 
 // A spawn event is generated when the framework finds a space with your bot in it
 // If actorId is set, it means that user has just added your bot to a new space
@@ -129,43 +128,13 @@ framework.hears(
   "**help**: (what you are reading now)\n\n"
 );
 
-// Add BOM handler - matches both "BOM" alone and "BOM" followed by device list
 
-/* CNC 7.0 BoM Handler
-framework.hears(
-  /^BOM/im,
-  async (bot, trigger) => {
-
-    
-    try {
-      // Process the raw input directly
-      const result = await processQuote(trigger.text);
-      
-      // Send the result back to user
-      bot.say('markdown', `Processed BOM Results:\n\`\`\`\n${result}\`\`\``);
-
-    } catch (error) {
-      console.error("Error processing BOM:", error);
-      bot.say('markdown', 
-        `${error.message}\n\n` +
-        `Please use format:\n` +
-        `\`\`\`\n` +
-        `BOM 8101-32H,1 8102-64H,2\n` +
-        `\`\`\``
-      );
-    }
-  },
-  0
-);
-*/
 
 // Add CCWR2CCW 
 framework.hears(
   /^CCWR2CCW/im,
   async (bot, trigger) => {
-    console.log("\n=== CCWR2CCW Processing Start ===");
-    console.log("Message:", trigger.message);
-    
+    console.log("\n=== CCWR2CCW Processing Start ===");    
     const user = trigger.person.emails[0];
     
     try {
@@ -186,7 +155,7 @@ framework.hears(
       // Process the file
       const { processCSVFile } = require('./logic/R2CCW/ccwr2ccw.js');
       const processedResult = await processCSVFile(fileContent, user, trigger.message.files[0].split('/').pop());
-      console.log("File processed");
+      console.log("File processed");      
 
       // Upload processed file
       await uploadFile(bot, trigger.message.roomId, processedResult, user);
@@ -212,10 +181,75 @@ framework.hears(
       );
     }
     console.log("=== CCWR2CCW Processing End ===\n");
-  },
-  "**ccwr2ccw**: (attach CSV file to process and get Est12345.csv back)\n\n"
-  
+  },  
 );
+
+// Add ANY2CCW 
+framework.hears(
+  /^ANY2CCW/im,
+  async (bot, trigger) => {
+    console.log("\n=== ANY2CCW Processing Start ===");    
+    const user = trigger.person.emails[0];    
+
+    try {
+      // Check if we have a file
+      if (!trigger.message.files || trigger.message.files.length === 0) {
+        logAudit(user, 'ANY2CCW', STATUS.ISSUE, 'No file attached');
+        throw new Error('Please attach Image file');
+      }
+
+      // Get first file URL
+      const fileUrl = trigger.message.files[0];
+      console.log("Processing file URL:", fileUrl);
+      
+      // Inform user about processing
+      await bot.say({
+        roomId: trigger.message.roomId,
+        markdown: "🔍 Processing your image, please wait..."
+      });
+
+      // Download and process image
+      const imgPath = await downloadImage(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
+      console.log('Image downloaded to:', imgPath);
+
+      // Run OCR
+      const ocrText = await runOCR(imgPath);
+      console.log('OCR text extracted:', ocrText.split('\n').length, 'lines');
+
+      // Convert to CSV and then to XLSX
+      // replace by Bridge IT - GPT 4o-mini
+      const { convertTextToCSV, convertToXLSXOutput } = require('./logic/Any2CCW/ocr-txt2csv.js');      
+
+      const processedResult = convertToXLSXOutput(convertTextToCSV(ocrText));
+      console.log('Converted to XLSX format:', processedResult.lineCount, 'lines');
+
+      // Upload result
+      await uploadFile(bot, trigger.message.roomId, processedResult, user);
+      console.log('File uploaded successfully');
+
+      // Log success
+      logAudit(user, 'ANY2CCW', STATUS.OK, 'File processed successfully', processedResult.lineCount);
+
+      await bot.say('markdown', `✅ Processing completed successfully. Processed ${processedResult.lineCount} lines.`);
+
+    } catch (error) {
+      console.error("Error processing ANY2CCW:", error);
+      
+      logAudit(user, 'ANY2CCW', STATUS.ERROR, error.message);
+      
+      await bot.say('markdown', 
+        `❌ Error: ${error.message}\n\n` +
+        `Please attach an Image file with your request:\n` +
+        `\`\`\`\n` +
+        `ANY2CCW\n` +
+        `[attach your Image file]\n` +
+        `\`\`\``
+      );
+    }
+    console.log("=== ANY2CCW Processing End ===\n");
+  }
+);
+
 
 // Update the catch-all handler
 framework.hears(
