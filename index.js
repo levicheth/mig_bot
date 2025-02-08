@@ -9,12 +9,10 @@ const path = require('path');
 const csv = require('csv');
 
 const { downloadFile, uploadFile, downloadImage } = require('./logic/shared/utils/file-handler.js');
-const { convertToXLSXOutput, normalize2EstimateFormat } = require('./logic/shared/utils/file-conversion.js');      
-const { convertTextToCSV } = require('./logic/Any2CCW/ocr-txt2csv.js');
-const { normalizeCSV2MemRecords } = require('./logic/R2CCW/ccwr2ccw.js');
-
 const { logAudit, STATUS } = require('./logic/shared/audit/audit.js');
-const { runOCR } = require('./logic/Any2CCW/ocr-proc.js');
+
+const { wflowCCWR2CCW } = require('./logic/R2CCW/ccwr2ccw.js');
+const { wflowAny2CCW } = require('./logic/Any2CCW/any2ccw.js');
 
 var app = express();
 app.use(bodyParser.json());
@@ -53,9 +51,17 @@ framework.showHelp = function() {
   `- wait for bot to respond with CCW Estimate in Excel format \n` +
   `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
   `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
+  `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` 
+  +
+  `**any2ccw**: \n` +
+  `- **beta-feature**\n` +
+  `- type ANY2CCW and add the screenshot of the quote/estimate in the same msg\n` +
+  `- the screenshot must be high quality and contain SKU, Quantity, Duration, other fields will be ignored\n` +
+  `- wait for bot to respond with CCW Estimate in Excel format \n` +
   `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` ;
 
   return helpText;
+
 };
 
 // A spawn event is generated when the framework finds a space with your bot in it
@@ -132,8 +138,6 @@ framework.hears(
   "**help**: (what you are reading now)\n\n"
 );
 
-
-
 // Add CCWR2CCW 
 framework.hears(
   /^CCWR2CCW/im,
@@ -155,9 +159,8 @@ framework.hears(
       const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
 
       // Process the file
-      const { processCSVFile } = require('./logic/R2CCW/ccwr2ccw.js');
-      const processedResult = await processCSVFile(fileContent, user, trigger.message.files[0].split('/').pop());
-      console.log("File processed");      
+      const processedResult = await wflowCCWR2CCW(fileContent, user, trigger.message.files[0].split('/').pop());
+      console.log("File processed");
 
       // Upload processed file
       await uploadFile(bot, trigger.message.roomId, processedResult, user);
@@ -201,7 +204,13 @@ framework.hears(
       const imgPath = await downloadImage(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
       console.log('Image downloaded to:', imgPath);
 
+      const processedResult = await wflowAny2CCW(imgPath, user, trigger.message.files[0].split('/').pop());
+      console.log('File processed');
+
+      /*
       // Run OCR
+
+
       const ocrText = await runOCR(imgPath);
       console.log('OCR text extracted:', ocrText.split('\n').length, 'lines');
 
@@ -217,6 +226,8 @@ framework.hears(
       const processedResult = convertToXLSXOutput(records);
       console.log('Converted to XLSX format:', processedResult.lineCount, 'lines');
 
+      */
+
       await uploadFile(bot, trigger.message.roomId, processedResult, user);
       console.log('File uploaded successfully');
       
@@ -225,8 +236,6 @@ framework.hears(
 
     } catch (error) {
       console.error("Error processing ANY2CCW:", error);
-      
-
       logAudit(user, 'ANY2CCW', STATUS.ERROR, error.message);
       
       await bot.say('markdown', 

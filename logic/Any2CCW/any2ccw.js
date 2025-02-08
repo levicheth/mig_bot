@@ -1,104 +1,73 @@
-// const tesseract = require("tesseract.js");
-const fs = require("fs");
-const csv = require('csv');
+const { logAudit, STATUS } = require('../shared/audit/audit');
+const { convertToXLSXOutput, normalize2EstimateFormat } = require('../shared/utils/file-conversion');
+const { countOutputLines, calculateTimeSavings } = require('../shared/utils/quote-utils');
+const { runOCR } = require('./ocr-proc');
+const { convertTextToCSV } = require('./ocr-txt2csv');
 
-// Path to the input image
-const inputImagePath = "./image.png"; // Replace with the correct image path
-const outputCsvPath = "./OUT01.csv";
 
-// Template columns
-const tplColumns = [
-  "Part Number",
-  "Quantity", 
-  "Duration (Mnths)",
-  "List Price",
-  "Discount %",
-  "Initial Term(Months)",
-  "Auto Renew Term(Months)",
-  "Billing Model",
-  "Requested Start Date",
-  "Notes"
-];
-
-/*
-// Perform OCR on the input image
-tesseract.recognize(inputImagePath, "eng")
-  .then(({ data: { text } }) => {
-    // Parse OCR text into structured data (manually cleaned for now)
-*/
-
-// Function to process image and return CSV data
-async function processImageToCSV(imageContent) {
+// Master workflow function for Any2CCW
+async function wflowAny2CCW(fileContent, user, filename) {
   try {
-    // For now, return mock data structure matching CCWR2CCW output format
-    const cleanedData = [
-      { "TERM, MON": 47, "Product Number": "ADN-ED-100G-SIA3", "Quantity": 36 },
-      { "TERM, MON": 40, "Product Number": "ESS-100G-SIA-3", "Quantity": 60 },
-      { "TERM, MON": 40, "Product Number": "ADV-100G-SIA-3", "Quantity": 60 },
-      { "TERM, MON": 42, "Product Number": "ESS-100G-SIA-3", "Quantity": 180 },
-      { "TERM, MON": 42, "Product Number": "ADV-100G-SIA-3", "Quantity": 180 },
-      { "TERM, MON": 51, "Product Number": "ESS-100G-SIA-3", "Quantity": 24 },
-      { "TERM, MON": 51, "Product Number": "ADV-100G-SIA-3", "Quantity": 24 },
-      { "TERM, MON": 42, "Product Number": "ESS-AC-10G-SIA-3", "Quantity": 750 },
-      { "TERM, MON": 42, "Product Number": "ADV-AC-10G-SIA-3", "Quantity": 750 },
-      { "TERM, MON": 43, "Product Number": "ESS-AC-10G-SIA-3", "Quantity": 1875 },
-      { "TERM, MON": 43, "Product Number": "ADV-AC-10G-SIA-3", "Quantity": 1875 },
-      { "TERM, MON": 45, "Product Number": "ESS-AC-10G-SIA-3", "Quantity": 1125 },
-      { "TERM, MON": 45, "Product Number": "ADV-AC-10G-SIA-3", "Quantity": 1125 },
-      { "TERM, MON": 46, "Product Number": "ESS-AC-10G-SIA-3", "Quantity": 3000 },
-      { "TERM, MON": 46, "Product Number": "ADV-AC-10G-SIA-3", "Quantity": 3000 },
-      { "TERM, MON": 47, "Product Number": "ESS-AC-10G-SIA-3", "Quantity": 7000 },
-      { "TERM, MON": 47, "Product Number": "ADV-AC-10G-SIA-3", "Quantity": 7000 },
-    ];
+    // Step 1: Process image through OCR
+    const ocrText = await runOCR(fileContent);
+    
+    // Step 2: Convert OCR text to normalized CSV format
+    const csvResult = convertTextToCSV(ocrText);
+    
+    // Step 3: Use Bridge AI to convert CSV to structured data
+    //const csvResultPostBridgeAI = await NormalizeViaBridgeAI(csvResult);
 
-    // Compute dynamic "Requested Start Date" (30 days from now)
-    const requestedStartDate = new Date();
-    requestedStartDate.setDate(requestedStartDate.getDate() + 30);
-    const formattedDate = requestedStartDate.toLocaleDateString("en-US");
+    // Parse CSV content into records format
+    // Note: csvResult.buffer contains CSV string data
 
-    // Map data to match the template structure
-    const outputData = cleanedData.map(row => ({
-      "Part Number": row["Product Number"],
-      "Quantity": row["Quantity"],
-      "Duration (Mnths)": "",
-      "List Price": "",
-      "Discount %": "",
-      "Initial Term(Months)": row["TERM, MON"],
-      "Auto Renew Term(Months)": 0,
-      "Billing Model": "Prepaid Term",
-      "Requested Start Date": formattedDate,
-      "Notes": ""
-    }));
-
-    // Convert to CSV using csv library
-    const csvData = await new Promise((resolve, reject) => {
-      csv.stringify(outputData, {
-        header: true,
-        columns: tplColumns
-      }, (err, output) => {
-        if (err) reject(new Error('Failed to generate CSV'));
-        else resolve(output);
+    const records = csvResult.buffer.toString()
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        const [sku, quantity] = line.split(',');
+        return {
+          'SKU': sku.trim(),
+          'Quantity': quantity.trim()
+        };
       });
-    });
 
-    // Return in the same format as CCWR2CCW
+    // Get quote info with default HW type since this is SKU-based
+    const quoteInfo = {
+      quoteType: 'NA',
+      quoteNumber: 'NA',
+      quoteCurrency: 'NA',
+      quotePrice: '0'
+    };
+
+    // Transform records using shared normalize function
+    const transformedRecords = normalize2EstimateFormat(records, quoteInfo);
+
+    // Count lines and calculate savings
+    const lineCount = countOutputLines(transformedRecords);
+    const timeSaved = calculateTimeSavings(lineCount);
+
+    // Convert to XLSX using the imported function
+    const buffer = convertToXLSXOutput(transformedRecords);
+    
+    // Add line count to log with quote info
+    logAudit(user, 'ANY2CCW', STATUS.OK, 'File processed OK', lineCount, quoteInfo);
+
     return {
-      buffer: Buffer.from(csvData), // Now using actual CSV data
-      lineCount: outputData.length,
-      timeSaved: outputData.length * 0.5,
-      quoteInfo: {
-        quoteNumber: 'ANY2CCW-' + Date.now(),
-        quoteCurrency: 'USD',
-        quotePrice: ''
-      }
+      buffer,
+      lineCount,
+      timeSaved,
+      quoteInfo
     };
 
   } catch (error) {
-    console.error("Error during image processing:", error);
+    console.error('Any2CCW Processing Error:', error.message);
+    logAudit(user, 'ANY2CCW', STATUS.ERROR, error.message, 0, {
+      quoteNumber: '',
+      quoteCurrency: '',
+      quotePrice: ''
+    });
     throw error;
   }
 }
 
-module.exports = {
-  processImageToCSV
-};
+module.exports = { wflowAny2CCW };

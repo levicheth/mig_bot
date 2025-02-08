@@ -79,7 +79,7 @@ async function normalizeCSV2MemRecords(csvContent) {
 
 
 // Master function 
-async function processCSVFile(fileContent, user, filename) {
+async function wflowCCWR2CCW(fileContent, user, filename) {
   try {
     // First get CSV content regardless of input format
     const csvContent = await normalizeInputToCSV(fileContent);
@@ -124,4 +124,4 @@ async function processCSVFile(fileContent, user, filename) {
   }
 }
 
-module.exports = { processCSVFile };
+module.exports = { wflowCCWR2CCW };
