@@ -100,7 +100,52 @@ function convertXLSXtoCSV(xlsxBuffer) {
   }
 }
 
-function normalize2EstimateFormat(records, quoteInfo) {
+function parseCSVToRecords(csvString) {
+  try {
+    // Split CSV into lines
+    const lines = csvString.trim().split('\n');
+    
+    // Get headers from first line
+    const headers = lines[0].split(',');
+    
+    // Convert remaining lines to records
+    const records = lines.slice(1).map(line => {
+      const values = line.split(',');
+      const record = {};
+      headers.forEach((header, index) => {
+        // Map CSV columns to record fields
+        switch(header.trim()) {
+          case 'Part Number':
+            record.sku = values[index];
+            break;
+          case 'Quantity':
+            record.qty = values[index];
+            break;
+          case 'Duration':
+            // Map Duration to Initial Term
+            record['Initial Term(Months)'] = values[index];
+            break;
+          default:
+            record[header.trim()] = values[index];
+        }
+      });
+      return record;
+    });
+
+    console.log('Parsed records:', records); // Debug log
+    return records;
+  } catch (error) {
+    console.error('Error parsing CSV to records:', error);
+    return [];
+  }
+}
+
+function normalize2EstimateFormat(records, quoteInfo = { quoteType: 'HW' }) {
+  if (!Array.isArray(records)) {
+    console.error('Invalid records format:', records);
+    return [];
+  }
+
   // Get requested start date
   const reqStartDate = calcReqStartDate();
 
@@ -118,7 +163,7 @@ function normalize2EstimateFormat(records, quoteInfo) {
       'Duration (Mnths)': '',
       'List Price': '',
       'Discount %': '',
-      'Initial Term(Months)': parseInt(duration || '0', 10),
+      'Initial Term(Months)': parseInt(record['Initial Term(Months)'] || duration || '0', 10),
       'Auto Renew Term(Months)': 0,
       'Billing Model': 'Prepaid Term',
       'Requested Start Date': reqStartDate,
@@ -127,9 +172,61 @@ function normalize2EstimateFormat(records, quoteInfo) {
   });
 }
 
+function BridgeAIPostProcess(csvResult) {
+  try {
+    // If csvResult is undefined or null, return empty CSV
+    if (!csvResult) {
+      console.warn('Empty CSV result received');
+      return 'Part Number,Quantity,Duration\n';
+    }
+
+    // Ensure csvResult is a string
+    const csvString = csvResult.toString();
+
+    // Split into lines and filter out empty lines
+    const lines = csvString.split('\n').filter(line => line.trim());
+    
+    // Validate header
+    const expectedHeader = 'Part Number,Quantity,Duration';
+    const headerIndex = lines.findIndex(line => line.includes(expectedHeader));
+    
+    // Extract only the CSV portion (from header onwards)
+    const csvLines = headerIndex >= 0 
+      ? lines.slice(headerIndex) 
+      : [expectedHeader, ...lines];
+
+    // Clean and validate each line
+    const cleanedLines = csvLines.map(line => {
+      // Remove any quotes, extra whitespace, and carriage returns
+      return line.replace(/["'\r]/g, '').trim();
+    }).filter(line => {
+      // Keep only lines that have the correct format (two commas)
+      const parts = line.split(',');
+      return parts.length === 3;
+    });
+
+    // Ensure we have at least a header
+    if (cleanedLines.length === 0) {
+      cleanedLines.push(expectedHeader);
+    }
+
+    // Rejoin lines with proper line endings
+    const result = cleanedLines.join('\n');
+    console.log('Processed CSV result:', result); // Debug log
+    return result;
+
+  } catch (error) {
+    console.error('Error in BridgeAIPostProcess:', error);
+    // Return empty CSV with header if processing fails
+    return 'Part Number,Quantity,Duration\n';
+  }
+}
+
 module.exports = {
   convertToXLSXOutput,
   convertXLSXtoCSV,
-  normalize2EstimateFormat
+  normalize2EstimateFormat,
+  BridgeAIPostProcess,
+  parseCSVToRecords
 };
 
