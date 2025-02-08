@@ -26,6 +26,13 @@ function convertTextToCSV(text) {
     };
 }
 
+// re-use existing code, take CSV above two params and inject into existing workflow; 
+// refactor from R2CCW 
+// move this logic to any2ccw
+
+// integrate API 
+
+
 function convertToXLSXOutput(csvResult) {
     // Parse CSV content into array
     const rows = csvResult.buffer.toString()

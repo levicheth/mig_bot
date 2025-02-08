@@ -1,9 +1,40 @@
 const axios = require('axios');
-const { logR2CCW } = require('../shared/logger/r2ccw-logger');
+const { logR2CCW } = require('../logger/r2ccw-logger');
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
 require('dotenv').config();  // Add this to access env variables
+
+// Download the image and save it locally
+async function downloadImage(fileUrl, accessToken, user, bot, roomId) {
+    try {
+        // Create temp directory if it doesn't exist
+        const tempDir = path.join(__dirname, '../../temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        // Generate a unique temp file path
+        const filepath = path.join(tempDir, `temp_${Date.now()}.png`);
+        
+        // Download file with proper authorization
+        const response = await axios.get(fileUrl, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            },
+            responseType: 'arraybuffer'  // Important for binary files like images
+        });
+
+        // Write the buffer to a temp file
+        fs.writeFileSync(filepath, response.data);
+        console.log('Image downloaded to:', filepath);
+        
+        return filepath;
+    } catch (error) {
+        console.error('Error downloading image:', error);
+        throw new Error(`Failed to download image: ${error.response?.data?.message || error.message}`);
+    }
+}
 
 // Generate filename with timestamp and user
 function generateFilename(user) {
@@ -146,5 +177,6 @@ async function uploadFile(bot, roomId, processedResult, user, filename = null) {
 module.exports = {
   downloadFile,
   uploadFile,
-  uploadWxMsg
+  uploadWxMsg,
+  downloadImage  
 }; 

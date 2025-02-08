@@ -1,4 +1,38 @@
 const XLSX = require('xlsx');
+const { calcReqStartDate, calculateDuration } = require('./quote-utils');
+
+// Convert CSV to XLSX buffer
+function convertToXLSXOutput(records) {
+  try {
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Convert records to worksheet
+    const ws = XLSX.utils.json_to_sheet(records, {
+      header: [
+        'Part Number',
+        'Quantity',
+        'Duration (Mnths)',
+        'List Price',
+        'Discount %',
+        'Initial Term(Months)',
+        'Auto Renew Term(Months)',
+        'Billing Model',
+        'Requested Start Date',
+        'Notes'
+      ]
+    });
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+    // Generate buffer
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  } catch (error) {
+    console.error('XLSX conversion error:', error.message);
+    throw new Error('Failed to convert to Excel format');
+  }
+}
 
 function convertXLSXtoCSV(xlsxBuffer) {
   try {
@@ -66,4 +100,36 @@ function convertXLSXtoCSV(xlsxBuffer) {
   }
 }
 
-module.exports = { convertXLSXtoCSV }; 
+function normalize2EstimateFormat(records, quoteInfo) {
+  // Get requested start date
+  const reqStartDate = calcReqStartDate();
+
+  // Transform records to new format
+  return records.map(record => {
+    const startDate = record.startDate || record['Start Date'] || '';
+    const endDate = record.endDate || record['End Date'] || '';
+    const duration = calculateDuration(startDate, endDate);
+
+    return {
+      'Part Number': quoteInfo.quoteType === 'SW' 
+        ? (record.pid || record['Product Number'] || '')
+        : (record.sku || record['SKU'] || ''),
+      'Quantity': parseInt(record.qty || record['Quantity'] || '1', 10),
+      'Duration (Mnths)': '',
+      'List Price': '',
+      'Discount %': '',
+      'Initial Term(Months)': parseInt(duration || '0', 10),
+      'Auto Renew Term(Months)': 0,
+      'Billing Model': 'Prepaid Term',
+      'Requested Start Date': reqStartDate,
+      'Notes': ''
+    };
+  });
+}
+
+module.exports = {
+  convertToXLSXOutput,
+  convertXLSXtoCSV,
+  normalize2EstimateFormat
+};
+

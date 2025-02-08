@@ -2,11 +2,11 @@ const fs = require('fs');
 const csv = require('csv');
 const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const { logAudit, STATUS } = require('../shared/audit/audit');
-const { convertToXLSXOutput } = require('./file-conversion');
-const { countOutputLines, calculateTimeSavings, calcReqStartDate, calculateDuration, normalizeInputToCSV, getCSVQuoteInfo } = require('./r2-utils');
+const { convertToXLSXOutput, normalize2EstimateFormat } = require('../shared/utils/file-conversion');
+const { countOutputLines, calculateTimeSavings, normalizeInputToCSV, getCSVQuoteInfo } = require('../shared/utils/quote-utils');
 
 // Preprocess CSV content to find and extract data starting with header
-function getCSVBody(content) {
+function getCSVBodyFromCCWRQuote(content) {
   try {
     // Split into lines
     const lines = content.split('\n');
@@ -39,7 +39,7 @@ function getCSVBody(content) {
 }
 
 // Parse quote body to get records from CSV content
-async function parseQuoteBody(csvContent) {
+async function normalizeCSV2MemRecords(csvContent) {
   // Clean the content by removing empty/invalid lines
   const cleanContent = csvContent.split('\n')
     .reduce((acc, line) => {
@@ -77,6 +77,7 @@ async function parseQuoteBody(csvContent) {
   return records;
 }
 
+
 // Master function 
 async function processCSVFile(fileContent, user, filename) {
   try {
@@ -86,35 +87,13 @@ async function processCSVFile(fileContent, user, filename) {
     // Get quote info - qwt #, NP, currency > Only for AUDIT file
     const quoteInfo = getCSVQuoteInfo(csvContent);
 
-    const preprocessed = getCSVBody(csvContent);
+    const preprocessed = getCSVBodyFromCCWRQuote(csvContent);
 
     // Parse the quote body to get records
-    const records = await parseQuoteBody(preprocessed);
+    const records = await normalizeCSV2MemRecords(preprocessed);
 
-    // Get requested start date
-    const reqStartDate = calcReqStartDate();
-
-    // Transform records to new format
-    const transformedRecords = records.map(record => {
-      const startDate = record.startDate || record['Start Date'] || '';
-      const endDate = record.endDate || record['End Date'] || '';
-      const duration = calculateDuration(startDate, endDate);
-
-      return {
-        'Part Number': quoteInfo.quoteType === 'SW' 
-          ? (record.pid || record['Product Number'] || '')
-          : (record.sku || record['SKU'] || ''),
-        'Quantity': parseInt(record.qty || record['Quantity'] || '1', 10),
-        'Duration (Mnths)': '',
-        'List Price': '',
-        'Discount %': '',
-        'Initial Term(Months)': parseInt(duration || '0', 10),
-        'Auto Renew Term(Months)': 0,
-        'Billing Model': 'Prepaid Term',
-        'Requested Start Date': reqStartDate,
-        'Notes': ''
-      };
-    });
+    // Transform records using the dedicated function
+    const transformedRecords = normalize2EstimateFormat(records, quoteInfo);
 
     // Count lines and calculate savings
     const lineCount = countOutputLines(transformedRecords);
@@ -146,4 +125,3 @@ async function processCSVFile(fileContent, user, filename) {
 }
 
 module.exports = { processCSVFile };
-

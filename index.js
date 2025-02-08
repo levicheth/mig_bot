@@ -8,9 +8,13 @@ const fs = require('fs');
 const path = require('path');
 const csv = require('csv');
 
-const { downloadFile, uploadFile } = require('./logic/R2CCW/file-handler');
+const { downloadFile, uploadFile, downloadImage } = require('./logic/shared/utils/file-handler.js');
+const { convertToXLSXOutput, normalize2EstimateFormat } = require('./logic/shared/utils/file-conversion.js');      
+const { convertTextToCSV } = require('./logic/Any2CCW/ocr-txt2csv.js');
+const { normalizeCSV2MemRecords } = require('./logic/R2CCW/ccwr2ccw.js');
+
 const { logAudit, STATUS } = require('./logic/shared/audit/audit.js');
-const { downloadImage, runOCR } = require('./logic/Any2CCW/ocr-proc.js');
+const { runOCR } = require('./logic/Any2CCW/ocr-proc.js');
 
 var app = express();
 app.use(bodyParser.json());
@@ -136,21 +140,19 @@ framework.hears(
   async (bot, trigger) => {
     console.log("\n=== CCWR2CCW Processing Start ===");    
     const user = trigger.person.emails[0];
-    
+
     try {
-      // Check if we have a file
       if (!trigger.message.files || trigger.message.files.length === 0) {
         logAudit(user, 'CCWR2CCW', STATUS.ISSUE, 'No file attached');
         throw new Error('Please attach a CSV file');
       }
 
-      // Get first file
-      const fileUrl = trigger.message.files[0];
-      console.log("File URL:", fileUrl);
+      const fileUrl = trigger.message.files[0];    
+      console.log("File downloaded");
       
       // Download file content using proper token from env
+      console.log("File URL:", fileUrl);
       const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
-      console.log("File downloaded");
 
       // Process the file
       const { processCSVFile } = require('./logic/R2CCW/ccwr2ccw.js');
@@ -160,17 +162,8 @@ framework.hears(
       // Upload processed file
       await uploadFile(bot, trigger.message.roomId, processedResult, user);
       
-      // Single audit log entry with quote info
-      //logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed successfully', processedResult.lineCount, processedResult.quoteInfo);
-
     } catch (error) {
-      console.error("Error processing CCWR2CCW:", error);
-      //logAudit(user, 'CCWR2CCW', STATUS.ERROR, error.message, 0, {
-      //  quoteNumber: '',
-      //  quoteCurrency: '',
-      //  quotePrice: ''
-      //});
-      
+      console.error("Error processing CCWR2CCW:", error);      
       bot.say('markdown', 
         `Error: ${error.message}\n\n` +
         `Please attach a CSV file with your request:\n` +
@@ -188,21 +181,17 @@ framework.hears(
 framework.hears(
   /^ANY2CCW/im,
   async (bot, trigger) => {
-    console.log("\n=== ANY2CCW Processing Start ===");    
     const user = trigger.person.emails[0];    
 
     try {
-      // Check if we have a file
       if (!trigger.message.files || trigger.message.files.length === 0) {
         logAudit(user, 'ANY2CCW', STATUS.ISSUE, 'No file attached');
         throw new Error('Please attach Image file');
       }
 
-      // Get first file URL
       const fileUrl = trigger.message.files[0];
-      console.log("Processing file URL:", fileUrl);
-      
-      // Inform user about processing
+      console.log("Processing file URL:", fileUrl); 
+
       await bot.say({
         roomId: trigger.message.roomId,
         markdown: "🔍 Processing your image, please wait..."
@@ -218,23 +207,26 @@ framework.hears(
 
       // Convert to CSV and then to XLSX
       // replace by Bridge IT - GPT 4o-mini
-      const { convertTextToCSV, convertToXLSXOutput } = require('./logic/Any2CCW/ocr-txt2csv.js');      
 
-      const processedResult = convertToXLSXOutput(convertTextToCSV(ocrText));
+      const ocrTextToCSV = convertTextToCSV(ocrText);
+
+      const ocrCSVtoMemRecords = await normalizeCSV2MemRecords(ocrTextToCSV);
+
+      const records = normalize2EstimateFormat(ocrCSVtoMemRecords);
+
+      const processedResult = convertToXLSXOutput(records);
       console.log('Converted to XLSX format:', processedResult.lineCount, 'lines');
 
-      // Upload result
       await uploadFile(bot, trigger.message.roomId, processedResult, user);
       console.log('File uploaded successfully');
-
-      // Log success
+      
       logAudit(user, 'ANY2CCW', STATUS.OK, 'File processed successfully', processedResult.lineCount);
-
       await bot.say('markdown', `✅ Processing completed successfully. Processed ${processedResult.lineCount} lines.`);
 
     } catch (error) {
       console.error("Error processing ANY2CCW:", error);
       
+
       logAudit(user, 'ANY2CCW', STATUS.ERROR, error.message);
       
       await bot.say('markdown', 

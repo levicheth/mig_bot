@@ -1,7 +1,6 @@
 const fs = require('fs');
 const csv = require('csv');
 const XLSX = require('xlsx');
-const { convertXLSXtoCSV } = require('./xlsx2csv');
 
 // Count lines in transformed records
 function countOutputLines(records) {
