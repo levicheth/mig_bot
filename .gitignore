@@ -1,13 +1,31 @@
-bak
-node_modules
-dist
-.DS_Store
-vite.config.ts.*
+# Build outputs
+dist/
+build/
+*.zip
 *.tar.gz
 **/*.log
 **/*.csv
-.replit
-.env
 .png
 eng.traineddata
+
+# Environment & secrets
+.env
+.env.local
+.env.*
+*.pem
+aws.credentials
+.DS_Store
+
+# Runtime & cache
+.docker/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.railway/cache/
+
+# Dependencies
+node_modules/
+
+# Local tests
 .ocr-test.js
+.github/workflows/.start.sh

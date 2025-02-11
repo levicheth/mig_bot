@@ -1,0 +1,43 @@
+# Development
+.git
+.gitignore
+.env
+.env.*
+*.md
+.vscode
+.idea
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules
+coverage
+
+# Build outputs
+dist
+build
+*.zip
+*.tar.gz
+
+# Docker
+Dockerfile
+docker-compose.yml
+.docker
+.dockerignore
+
+# AWS
+.aws
+aws.json
+aws.config
+
+# Testing
+__tests__
+test
+tests
+*.test.js
+*.spec.js
+
+# Temporary files
+tmp
+temp
+*.tmp
