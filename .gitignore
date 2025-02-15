@@ -27,5 +27,5 @@ aws.credentials
 node_modules/
 
 # Local tests
-.ocr-test.js
 .github/workflows/.start.sh
+.test*

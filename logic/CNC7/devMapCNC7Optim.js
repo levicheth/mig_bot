@@ -31,7 +31,10 @@ const deviceMapping = {
     // Other patterns
     '^IOS-XRv-9000': 'Type A'
   },
-  'NonCisco': {
+  'NonCisco': {    
+    '^Huawei.*': 'Type B',
+    '^Nokia.*': 'Type C',
+    '^Juniper.*': 'Type A',
     'Any': 'Type A'
   }
 };
@@ -45,7 +48,15 @@ function findDeviceType(deviceId) {
     }
   }
   
-  // Default to NonCisco
+  // Check NonCisco patterns
+  for (const [pattern, type] of Object.entries(deviceMapping.NonCisco)) {
+    if (pattern === 'Any') continue; // Skip the default pattern
+    if (new RegExp(pattern).test(deviceId)) {
+      return { vendor: 'NonCisco', type };
+    }
+  }
+  
+  // Default to NonCisco Type A
   return { vendor: 'NonCisco', type: deviceMapping.NonCisco.Any };
 }
 

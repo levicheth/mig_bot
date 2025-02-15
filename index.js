@@ -13,6 +13,7 @@ const { logAudit, STATUS } = require('./logic/shared/audit/audit.js');
 
 const { wflowCCWR2CCW } = require('./logic/R2CCW/ccwr2ccw.js');
 const { wflowAny2CCW } = require('./logic/Any2CCW/any2ccw.js');
+const { wflowCNC7Quoter } = require('./logic/CNC7/cnc7quoter.js');
 
 var app = express();
 app.use(bodyParser.json());
@@ -53,16 +54,18 @@ framework.showHelp = function() {
   `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
   `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` 
   +
-  `**any2ccw**: \n` +
-  `- **beta-feature**\n` +
-  `- type ANY2CCW and add the screenshot of the quote/estimate in the same msg\n` +
-  `- the screenshot must be high quality and contain SKU, Quantity, Duration, other fields will be ignored\n` +
-  `- wait for bot to respond with CCW Estimate in Excel format \n` +
+  `**cnc7quoter**: \n` +
+  `- this functions automatically generate CCW Estimate based on the nesessary inputs\n` +
+  `- type CNC and add the CSV file with the device types and quantities in the same msg\n` +
+  `- wait for bot to respond with CCW Estimate of CNC v7.0 estimate in Excel format \n` +
+  `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
+  `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
   `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` ;
 
   return helpText;
 
 };
+
 
 // A spawn event is generated when the framework finds a space with your bot in it
 // If actorId is set, it means that user has just added your bot to a new space
@@ -180,6 +183,49 @@ framework.hears(
   },  
 );
 
+// Add CNC7Quoter 
+framework.hears(
+  /^CNC7QUOTER/im,
+  async (bot, trigger) => {
+    console.log("\n=== CNC7QUOTER Processing Start ===");    
+    const user = trigger.person.emails[0];
+
+    try {
+      if (!trigger.message.files || trigger.message.files.length === 0) {
+        logAudit(user, 'CNC7QUOTER', STATUS.ISSUE, 'No file attached');
+        throw new Error('Please attach a CSV file');
+      }
+
+      const fileUrl = trigger.message.files[0];    
+      console.log("File downloaded");
+      
+      // Download file content using proper token from env
+      console.log("File URL:", fileUrl);
+      const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
+
+      // Process the file
+      const processedResult = await wflowCNC7Quoter(fileContent, user, trigger.message.files[0].split('/').pop());
+      console.log("File processed");
+
+      // Upload processed file
+      await uploadFile(bot, trigger.message.roomId, processedResult, user);
+      
+    } catch (error) {
+      console.error("Error processing CNC7QUOTER:", error);      
+      bot.say('markdown', 
+        `Error: ${error.message}\n\n` +
+        `Please attach a CSV file with your request:\n` +
+        `\`\`\`\n` +
+        `CNC7QUOTER\n` +
+        `[attach your CSV file]\n` +
+        `\`\`\``
+      );
+    }
+    console.log("=== CNC7QUOTER Processing End ===\n");
+  },  
+);
+
+
 // Add ANY2CCW 
 framework.hears(
   /^ANY2CCW/im,
@@ -219,7 +265,7 @@ framework.hears(
 
       const ocrTextToCSV = convertTextToCSV(ocrText);
 
-      const ocrCSVtoMemRecords = await normalizeCSV2MemRecords(ocrTextToCSV);
+      const ocrCSVtoMemRecords = await convertCSV2Obj(ocrTextToCSV);
 
       const records = normalize2EstimateFormat(ocrCSVtoMemRecords);
 

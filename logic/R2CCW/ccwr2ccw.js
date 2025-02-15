@@ -1,8 +1,7 @@
 const fs = require('fs');
-const csv = require('csv');
 const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const { logAudit, STATUS } = require('../shared/audit/audit');
-const { convertToXLSXOutput, normalize2EstimateFormat } = require('../shared/utils/file-conversion');
+const { convertToXLSXOutput, normalize2EstimateFormat, convertCSV2Obj } = require('../shared/utils/file-conversion');
 const { countOutputLines, calculateTimeSavings, normalizeInputToCSV, getCSVQuoteInfo } = require('../shared/utils/quote-utils');
 
 // Preprocess CSV content to find and extract data starting with header
@@ -38,45 +37,6 @@ function getCSVBodyFromCCWRQuote(content) {
   }
 }
 
-// Parse quote body to get records from CSV content
-async function normalizeCSV2MemRecords(csvContent) {
-  // Clean the content by removing empty/invalid lines
-  const cleanContent = csvContent.split('\n')
-    .reduce((acc, line) => {
-      if (acc.stopped || line.trim().startsWith(',')) {
-        acc.stopped = true;
-        return acc;
-      }
-      acc.lines.push(line);
-      return acc;
-    }, { lines: [], stopped: false })
-    .lines
-    .join('\n');
-
-  if (!cleanContent.trim()) {
-    throw new Error('No valid content found in file');
-  }
-
-  // Parse CSV content into records
-  const records = await new Promise((resolve, reject) => {
-    csv.parse(cleanContent, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-      relaxColumnCount: true
-    }, (err, data) => {
-      if (err) reject(new Error('Invalid file format'));
-      else resolve(data);
-    });
-  });
-
-  if (!records || records.length === 0) {
-    throw new Error('CSV file is empty or invalid');
-  }
-
-  return records;
-}
-
 
 // Master function 
 async function wflowCCWR2CCW(fileContent, user, filename) {
@@ -90,7 +50,7 @@ async function wflowCCWR2CCW(fileContent, user, filename) {
     const preprocessed = getCSVBodyFromCCWRQuote(csvContent);
 
     // Parse the quote body to get records
-    const records = await normalizeCSV2MemRecords(preprocessed);
+    const records = await convertCSV2Obj(preprocessed);
 
     // Transform records using the dedicated function
     const transformedRecords = normalize2EstimateFormat(records, quoteInfo);

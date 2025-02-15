@@ -7,7 +7,7 @@ function countOutputLines(records) {
     return records.length;
 }
   
-  // Calculate time savings (0.5 mins per line)
+// Calculate time savings (0.5 mins per line)
 function calculateTimeSavings(lineCount) {
 return lineCount * 0.5;
 }
@@ -57,7 +57,7 @@ try {
 }
 }
 
-// Detect file type and convert to CSV content if needed
+// Detect file (CSV/XLSX) type, remove empty lines (CRs) and convert to CSV format
 async function normalizeInputToCSV(fileContent) {
 try {
     // First try to parse as CSV
