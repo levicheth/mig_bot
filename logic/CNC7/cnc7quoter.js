@@ -7,11 +7,12 @@ const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const { logAudit, STATUS } = require('../shared/audit/audit');
 const { convertToXLSXOutput, normalize2EstimateFormat, convertCSV2Obj } = require('../shared/utils/file-conversion');
 const { countOutputLines, calculateTimeSavings, normalizeInputToCSV } = require('../shared/utils/quote-utils');
+const { uploadWxMsg } = require('../shared/utils/file-handler');
 
 // Process entries using device mapping
 function bomProcessor(records) {
   try {
-    // Initialize type groups for counting with vendor prefix
+    // Initialize type groups and comments array
     const typeGroups = {
       'Cisco Type A': 0,
       'Cisco Type B': 0,
@@ -20,6 +21,8 @@ function bomProcessor(records) {
       'NonCisco Type B': 0,
       'NonCisco Type C': 0
     };
+    
+    const comments = [];
 
     // Process each record
     records.forEach(record => {
@@ -40,7 +43,10 @@ function bomProcessor(records) {
       // Add quantity to appropriate type group
       typeGroups[groupKey] = (typeGroups[groupKey] || 0) + quantity;
 
-      console.log(`${deviceId} w qty ${quantity} mapped to ${groupKey}, new total: ${typeGroups[groupKey]}`);
+      // Save comment
+      const comment = `Device: ${deviceId} > ${groupKey}, Qty: ${quantity}, New total: ${typeGroups[groupKey]}`;
+      console.log(comment);
+      comments.push(comment);
     });
 
     // Filter out types with zero quantity
@@ -52,7 +58,7 @@ function bomProcessor(records) {
       }, {});
 
     console.log('Final device type groups:', result);
-    return result;
+    return { result, comments };
 
   } catch (error) {
     console.error('BOM Processing error:', error);
@@ -63,8 +69,8 @@ function bomProcessor(records) {
 // Generate CNC7 quote records
 async function genCNC7QuoteRecords(records) {
   try {
-    // Process records to get type groups
-    const typeGroups = bomProcessor(records);
+    // Process records to get type groups and comments
+    const { result: typeGroups, comments } = bomProcessor(records);
     console.log('CNC7 Quote typeGroups', typeGroups);
 
     // Generate output records
@@ -96,7 +102,7 @@ async function genCNC7QuoteRecords(records) {
       });
     });
 
-    return outputRecords;
+    return { outputRecords, comments };
 
   } catch (error) {
     console.error('Error generating CNC7 quote:', error);
@@ -114,7 +120,7 @@ async function wflowCNC7Quoter(fileContent, user, filename) {
     const objRecords = await convertCSV2Obj(csvContent);
     
     // MAIN LOGIC: Generate CNC7 quote records
-    const cnc7Records = await genCNC7QuoteRecords(objRecords);
+    const { outputRecords: cnc7Records, comments: cnc7Comments } = await genCNC7QuoteRecords(objRecords);
     console.log('cnc7Records before normalization:', cnc7Records);
 
     // Normalize to estimate format
@@ -132,13 +138,32 @@ async function wflowCNC7Quoter(fileContent, user, filename) {
     // Convert to XLSX
     const buffer = convertToXLSXOutput(transformedRecords);
     
+    // Define CNC links and contacts
+    const cncInfo = {
+      mailer: 'crosswork-device-sizing@cisco.com',
+      sizingGuide: 'https://salesconnect.cisco.com/sc/s/simple-media?vtui__mediaId=a1m8c00000plBelAAE'
+    };
+    
+    // Format comments for Webex message
+    const commentsMsg = [
+      '🔍 Device Mapping Results:',
+      ...cnc7Comments,
+      '',
+      '📧 For sizing questions contact:',
+      cncInfo.mailer,
+      '',
+      '📚 Automation Sizing Guide:',
+      cncInfo.sizingGuide
+    ].join('\n');
+
     // Log success
     logAudit(user, 'CNC7', STATUS.OK, 'File processed OK', lineCount);
 
     return {
       buffer,
       lineCount,
-      timeSaved
+      timeSaved,
+      comments: commentsMsg
     };
 
   } catch (error) {

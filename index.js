@@ -32,7 +32,6 @@ if (process.env.WEBHOOKURL && process.env.PORT) {
   config.port = process.env.PORT;
 }
 
-
 // init framework
 var framework = new framework(config);
 framework.start();
@@ -47,20 +46,27 @@ framework.on("initialized", () => {
 framework.showHelp = function() {
   let helpText = `Currently implemented services:\n\n` +
   `**ccwr2ccw**: \n` +
-  `- in CCWR tool, export quote as CSV format; NB. by default it's XLSX format, so you must change it\n` +
-  `- type CCWR2CCW and add the CCWR quote in the same msg\n` +
-  `- wait for bot to respond with CCW Estimate in Excel format \n` +
-  `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
-  `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
-  `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` 
+  `- export CCWR quote, convert to MDM Quote format\n` +
+  `- demo: https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` 
+
+  // `- in CCWR tool, export quote as CSV format; NB. by default it's XLSX format, so you must change it\n` +
+  // `- type CCWR2CCW and add the CCWR quote in the same msg\n` +
+  // `- wait for bot to respond with CCW Estimate in Excel format \n` +
+  // `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
+  // `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
+  // `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` 
+  
   +
-  `**cnc7quoter**: \n` +
-  `- this functions automatically generate CCW Estimate based on the nesessary inputs\n` +
-  `- type CNC and add the CSV file with the device types and quantities in the same msg\n` +
-  `- wait for bot to respond with CCW Estimate of CNC v7.0 estimate in Excel format \n` +
-  `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
-  `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
-  `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` ;
+  `**cnc7**: cnc7 cisco | vendor_name | 9901 | <CSV file>\n` +
+  `- find Cisco/3rd part devices type for CNC 7.0 quote, or generate CNC 7.0 estimate based on CSV file with device types\n` +
+  `- demo: https://app.vidcast.io/share/f4aa609f-8988-4291-a248-d988b6b90023\n\n` ;
+
+  // `- this functions automatically generate CCW Estimate based on the nesessary inputs\n` +
+  // `- type CNC and add the CSV file with the device types and quantities in the same msg\n` +
+  // `- wait for bot to respond with CCW Estimate of CNC v7.0 estimate in Excel format \n` +
+  // `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
+  // `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
+  // `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` ;
 
   return helpText;
 
@@ -137,13 +143,12 @@ framework.hears(
       .say(`Hello ${trigger.person.displayName}.`)
       .then(() => bot.say("markdown", framework.showHelp()))
       .catch((e) => console.error(`Problem in help handler: ${e.message}`));
-  },
-  "**help**: (what you are reading now)\n\n"
+  }  
 );
 
 // Add CCWR2CCW 
 framework.hears(
-  /^CCWR2CCW/im,
+  /^CCWR/im,
   async (bot, trigger) => {
     console.log("\n=== CCWR2CCW Processing Start ===");    
     const user = trigger.person.emails[0];
@@ -185,17 +190,35 @@ framework.hears(
 
 // Add CNC7Quoter 
 framework.hears(
-  /^CNC7QUOTER/im,
+  /^CNC7/im,
   async (bot, trigger) => {
     console.log("\n=== CNC7QUOTER Processing Start ===");    
     const user = trigger.person.emails[0];
 
     try {
-      if (!trigger.message.files || trigger.message.files.length === 0) {
-        logAudit(user, 'CNC7QUOTER', STATUS.ISSUE, 'No file attached');
-        throw new Error('Please attach a CSV file');
+      // Check if this is a device lookup request
+      const message = trigger.message.text.trim();
+      if (!trigger.message.files) {
+        // Extract search term (everything after CNC7)
+        const searchTerm = message.replace(/^CNC7\s*/i, '').trim();
+        
+        if (!searchTerm) {
+          throw new Error('Please provide a device/vendor name to search or attach a CSV file');
+        }
+
+        // Perform device lookup
+        const { findDevice } = require('./logic/CNC7/devMapCNC7Optim.js');
+        const result = findDevice(searchTerm);
+        
+        await bot.say({
+          roomId: trigger.message.roomId,
+          markdown: result
+        });
+        
+        return;
       }
 
+      // Original file processing logic
       const fileUrl = trigger.message.files[0];    
       console.log("File downloaded");
       
@@ -204,19 +227,34 @@ framework.hears(
       const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
 
       // Process the file
-      const processedResult = await wflowCNC7Quoter(fileContent, user, trigger.message.files[0].split('/').pop());
+      const result = await wflowCNC7Quoter(fileContent, user, trigger.message.files[0].split('/').pop());
       console.log("File processed");
 
-      // Upload processed file
-      await uploadFile(bot, trigger.message.roomId, processedResult, user);
+      // Send the processed file
+      await uploadFile(bot, trigger.message.roomId, result, user);
+
+      // Send the mapping details
+      if (result.comments) {
+        await bot.say({
+          roomId: trigger.message.roomId,
+          markdown: result.comments
+        });
+      }
       
     } catch (error) {
-      console.error("Error processing CNC7QUOTER:", error);      
+      console.error("Error processing CNC7:", error);      
       bot.say('markdown', 
         `Error: ${error.message}\n\n` +
-        `Please attach a CSV file with your request:\n` +
+        `Usage:\n` +
+        `1. Device/Vendor lookup:\n` +
         `\`\`\`\n` +
-        `CNC7QUOTER\n` +
+        `CNC7 <device/vendor name>\n` +
+        `Example: CNC7 7750\n` +
+        `Example: CNC7 ciena\n` +
+        `\`\`\`\n\n` +
+        `2. Process BOM file:\n` +
+        `\`\`\`\n` +
+        `CNC7\n` +
         `[attach your CSV file]\n` +
         `\`\`\``
       );
@@ -224,7 +262,6 @@ framework.hears(
     console.log("=== CNC7QUOTER Processing End ===\n");
   },  
 );
-
 
 // Add ANY2CCW 
 framework.hears(
@@ -296,7 +333,6 @@ framework.hears(
     console.log("=== ANY2CCW Processing End ===\n");
   }
 );
-
 
 // Update the catch-all handler
 framework.hears(
