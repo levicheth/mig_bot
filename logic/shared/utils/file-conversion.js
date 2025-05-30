@@ -4,26 +4,46 @@ const fs = require('fs');
 const { calcReqStartDate, calculateDuration } = require('./quote-utils');
 
 // Convert Records/JSON to XLSX buffer
-function convertToXLSXOutput(records) {
+function convertToXLSXOutput(records, quoteInfo = { quoteType: 'SW' }) {
   try {
     // Create workbook
     const wb = XLSX.utils.book_new();
-    
-    // Convert records to worksheet
-    const ws = XLSX.utils.json_to_sheet(records, {
-      header: [
-        'Part Number',
-        'Quantity',
-        'Duration (Mnths)',
-        'List Price',
-        'Discount %',
-        'Initial Term(Months)',
-        'Auto Renew Term(Months)',
-        'Billing Model',
-        'Requested Start Date',
-        'Notes'
-      ]
-    });
+
+    let ws;
+    if (quoteInfo.quoteType === 'SW') {
+      // SW header (as-is)
+      ws = XLSX.utils.json_to_sheet(records, {
+        header: [
+          'Part Number',
+          'Quantity',
+          'Duration (Mnths)',
+          'List Price',
+          'Discount %',
+          'Initial Term(Months)',
+          'Auto Renew Term(Months)',
+          'Billing Model',
+          'Requested Start Date',
+          'Notes'
+        ]
+      });
+    } else {
+      // TS header (as specified)
+      ws = XLSX.utils.json_to_sheet(records, {
+        header: [
+          'Part Number',
+          'Quantity',
+          'Duration (Mnths)',
+          'Initial Term(Months)',
+          'Auto Renew Term(Months)',
+          'Billing Model',
+          'Requested Start Date',
+          'List Price',
+          'Discount %',
+          'CPL/Draw Disc %',
+          'Purchase Adjustments'
+        ]
+      });
+    }
 
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
@@ -136,51 +156,74 @@ function normalize2EstimateFormat(records, quoteInfo = { quoteType: 'SW' }, majo
     return [];
   }
 
-  // Get requested start date
-  const reqStartDate = calcReqStartDate();
-
-  // Add SPAUTO-CNC line if majorLineFlag is true
-  const outputRecords = [];
-  if (majorLineFlag) {
-    console.log('Adding SPAUTO-CNC major line');
-    outputRecords.push({
-      'Part Number': 'SPAUTO-CNC',
-      'Quantity': 1,
-      'Duration (Mnths)': '',
-      'List Price': '',
-      'Discount %': '',
-      'Initial Term(Months)': 36,
-      'Auto Renew Term(Months)': 0,
-      'Billing Model': 'Prepaid Term',
-      'Requested Start Date': reqStartDate,
-      'Notes': ''
+  // Transform records to new format for SW
+  if (quoteInfo.quoteType === 'SW') {
+    const reqStartDate = calcReqStartDate();
+    const transformedRecords = records.map(record => {
+      const startDate = record.startDate || record['Start Date'] || '';
+      const endDate = record.endDate || record['End Date'] || '';
+      const duration = calculateDuration(startDate, endDate);
+      const swFields = {
+        'Part Number': record.pid || record['Product Number'] || record['Part Number'] || '',
+        'Quantity': parseInt(record.qty || record['Quantity'] || '1', 10),
+        'Duration (Mnths)': record['Duration'] || '',
+        'List Price': '',
+        'Discount %': '',
+        'Initial Term(Months)': parseInt(record['Initial Term(Months)'] || record['Duration'] || duration || '0', 10),
+        'Auto Renew Term(Months)': 0,
+        'Billing Model': 'Prepaid Term',
+        'Requested Start Date': reqStartDate,
+        'Notes': ''
+      };
+      return swFields;
     });
+    return transformedRecords;
+  } else {
+    const servicesTransformedRecordsRaw = records.map(record => {
+      const rawListPrice = record['Prorated List Price'];
+      // Replace specific suffix with generic '-1'
+      const originalSKU = record.sku || record['SKU'] || '';
+      const lastDashIndex = originalSKU.lastIndexOf('-');
+      const SKUNoPrefix = lastDashIndex !== -1
+        ? originalSKU.substring(0, lastDashIndex + 1) + '1'
+        : originalSKU;
+      const ListPrice = rawListPrice && !isNaN(parseFloat(rawListPrice))
+        ? parseFloat(rawListPrice)
+        : 0;
+      return {
+        'Part Number': SKUNoPrefix,
+        'Quantity': 1,
+        'Duration (Mnths)': '',
+        'Initial Term(Months)': '',
+        'Auto Renew Term(Months)': '',
+        'Billing Model': '',
+        'Requested Start Date': '',
+        'List Price': ListPrice,
+        'Discount %': '',
+        'CPL/Draw Disc %': '',
+        'Purchase Adjustments': ''
+      };
+    });
+
+    // Pivot: group by Part Number and sum List Price
+    const pivotMap = new Map();
+    for (const rec of servicesTransformedRecordsRaw) {
+      const key = rec['Part Number'];
+      if (!pivotMap.has(key)) {
+        pivotMap.set(key, { ...rec });
+      } else {
+        const existing = pivotMap.get(key);
+        existing['List Price'] += rec['List Price'];
+      }
+    }
+    // Format List Price as float with 2 decimals
+    const servicesTransformedRecords = Array.from(pivotMap.values()).map(rec => ({
+      ...rec,
+      'List Price': rec['List Price'] ? rec['List Price'].toFixed(2) : ''
+    }));
+
+    return servicesTransformedRecords;
   }
-
-  // Transform records to new format
-  const transformedRecords = records.map(record => {
-    const startDate = record.startDate || record['Start Date'] || '';
-    const endDate = record.endDate || record['End Date'] || '';
-    const duration = calculateDuration(startDate, endDate);
-
-    return {
-      'Part Number': quoteInfo.quoteType === 'SW' 
-        ? (record.pid || record['Product Number'] || record['Part Number'] || '')
-        : (record.sku || record['SKU'] || ''),
-      'Quantity': parseInt(record.qty || record['Quantity'] || '1', 10),
-      'Duration (Mnths)': record['Duration'] || '',
-      'List Price': '',
-      'Discount %': '',
-      'Initial Term(Months)': parseInt(record['Initial Term(Months)'] || record['Duration'] || duration || '0', 10),
-      'Auto Renew Term(Months)': 0,
-      'Billing Model': 'Prepaid Term',
-      'Requested Start Date': reqStartDate,
-      'Notes': ''
-    };
-  });
-
-  // Combine SPAUTO-CNC line with transformed records
-  return [...outputRecords, ...transformedRecords];
 }
 
 function BridgeAIPostProcess(csvResult) {

@@ -60,7 +60,7 @@ async function wflowCCWR2CCW(fileContent, user, filename) {
     const timeSaved = calculateTimeSavings(lineCount);
 
     // Convert to XLSX using the imported function
-    const buffer = convertToXLSXOutput(transformedRecords);
+    const buffer = convertToXLSXOutput(transformedRecords, quoteInfo);
     
     // Add line count to log with quote info
     logR2CCW(user, filename, `file w ${lineCount} lines generated OK`);

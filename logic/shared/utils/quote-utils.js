@@ -148,7 +148,7 @@ try {
         remaining.substring(1).trim() : remaining.trim();
     }
 
-    // Look for Service Type column and check for "SUB-" pattern
+    // Determine Quote Type based on Service Type column
     const headerIndex = lines.findIndex(line => 
         line.toLowerCase().includes('service type')
     );
