@@ -57,12 +57,12 @@ async function wflowCCWR2CCW(fileContent, user, filename) {
     const transformedRecords = normalize2EstimateFormat(records, quoteInfo);
 
     // Count lines via Express API
-    const countResp = await axios.post("http://localhost:3000/count-output-lines", {
+    const countResp = await axios.post("http://127.0.0.1:3000/count-output-lines", {
       records: transformedRecords
     });
     const lineCount = countResp.data.result;
     
-    const response = await axios.post("http://localhost:3000/calc-time-savings", {
+    const response = await axios.post("http://127.0.0.1:3000/calc-time-savings", {
       lineCount: lineCount
     });
     const timeSaved = response.data.result;
