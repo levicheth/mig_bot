@@ -5,4 +5,5 @@ RUN npm install --omit=dev
 COPY . .
 ENV PORT=5000
 EXPOSE 5000
+EXPOSE 3000
 CMD ["npx", "concurrently", "node index.js", "node logic/shared/api/api_server.js"]
