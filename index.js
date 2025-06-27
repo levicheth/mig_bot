@@ -188,6 +188,16 @@ framework.hears(
   },  
 );
 
+// Add MbrVsbChk 
+framework.hears(
+  /^Mbr/im,
+  async (bot, trigger) => {
+    console.log("\n=== MbrVsbChk Processing Start ===");    
+    console.log("\n=== MbrVsbChk just a mock for now - TBC  ===");     
+    console.log("=== MbrVsbChk Processing End ===\n");
+  },  
+);
+
 // Add CNC7Quoter 
 framework.hears(
   /^CNC7/im,
@@ -261,77 +271,6 @@ framework.hears(
     }
     console.log("=== CNC7QUOTER Processing End ===\n");
   },  
-);
-
-// Add ANY2CCW 
-framework.hears(
-  /^ANY2CCW/im,
-  async (bot, trigger) => {
-    const user = trigger.person.emails[0];    
-
-    try {
-      if (!trigger.message.files || trigger.message.files.length === 0) {
-        logAudit(user, 'ANY2CCW', STATUS.ISSUE, 'No file attached');
-        throw new Error('Please attach Image file');
-      }
-
-      const fileUrl = trigger.message.files[0];
-      console.log("Processing file URL:", fileUrl); 
-
-      await bot.say({
-        roomId: trigger.message.roomId,
-        markdown: "🔍 Processing your image, please wait..."
-      });
-
-      // Download and process image
-      const imgPath = await downloadImage(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
-      console.log('Image downloaded to:', imgPath);
-
-      const processedResult = await wflowAny2CCW(imgPath, user, trigger.message.files[0].split('/').pop());
-      console.log('File processed');
-
-      /*
-      // Run OCR
-
-
-      const ocrText = await runOCR(imgPath);
-      console.log('OCR text extracted:', ocrText.split('\n').length, 'lines');
-
-      // Convert to CSV and then to XLSX
-      // replace by Bridge IT - GPT 4o-mini
-
-      const ocrTextToCSV = convertTextToCSV(ocrText);
-
-      const ocrCSVtoMemRecords = await convertCSV2Obj(ocrTextToCSV);
-
-      const records = normalize2EstimateFormat(ocrCSVtoMemRecords);
-
-      const processedResult = convertToXLSXOutput(records);
-      console.log('Converted to XLSX format:', processedResult.lineCount, 'lines');
-
-      */
-
-      await uploadFile(bot, trigger.message.roomId, processedResult, user);
-      console.log('File uploaded successfully');
-      
-      logAudit(user, 'ANY2CCW', STATUS.OK, 'File processed successfully', processedResult.lineCount);
-      await bot.say('markdown', `✅ Processing completed successfully. Processed ${processedResult.lineCount} lines.`);
-
-    } catch (error) {
-      console.error("Error processing ANY2CCW:", error);
-      logAudit(user, 'ANY2CCW', STATUS.ERROR, error.message);
-      
-      await bot.say('markdown', 
-        `❌ Error: ${error.message}\n\n` +
-        `Please attach an Image file with your request:\n` +
-        `\`\`\`\n` +
-        `ANY2CCW\n` +
-        `[attach your Image file]\n` +
-        `\`\`\``
-      );
-    }
-    console.log("=== ANY2CCW Processing End ===\n");
-  }
 );
 
 // Update the catch-all handler
