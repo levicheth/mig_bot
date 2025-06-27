@@ -6,4 +6,4 @@ COPY . .
 ENV PORT=5000
 EXPOSE 5000
 EXPOSE 3000
-CMD ["npx", "concurrently", "node index.js", "node logic/shared/api/api_server.js"]
+CMD ["npx", "concurrently", "node index.js", "node api_server.js"]
