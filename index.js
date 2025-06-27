@@ -12,7 +12,6 @@ const { downloadFile, uploadFile, downloadImage } = require('./logic/shared/util
 const { logAudit, STATUS } = require('./logic/shared/audit/audit.js');
 
 const { wflowCCWR2CCW } = require('./logic/R2CCW/ccwr2ccw.js');
-const { wflowAny2CCW } = require('./logic/Any2CCW/any2ccw.js');
 const { wflowCNC7Quoter } = require('./logic/CNC7/cnc7quoter.js');
 
 var app = express();

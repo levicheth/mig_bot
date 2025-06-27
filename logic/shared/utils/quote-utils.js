@@ -9,7 +9,7 @@ function countOutputLines(records) {
   
 // Calculate time savings (0.5 mins per line)
 function calculateTimeSavings(lineCount) {
-return lineCount * 0.5;
+    return lineCount * 0.5;
 }
 
 // Calculate requested start date (30 days from today)

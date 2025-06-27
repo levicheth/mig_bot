@@ -2,7 +2,8 @@ const fs = require('fs');
 const { logR2CCW } = require('../shared/logger/r2ccw-logger');
 const { logAudit, STATUS } = require('../shared/audit/audit');
 const { convertToXLSXOutput, normalize2EstimateFormat, convertCSV2Obj } = require('../shared/utils/file-conversion');
-const { countOutputLines, calculateTimeSavings, normalizeInputToCSV, getCSVQuoteInfo } = require('../shared/utils/quote-utils');
+const { normalizeInputToCSV, getCSVQuoteInfo } = require('../shared/utils/quote-utils');
+const axios = require('axios');
 
 // Preprocess CSV content to find and extract data starting with header
 function getCSVBodyFromCCWRQuote(content) {
@@ -55,9 +56,16 @@ async function wflowCCWR2CCW(fileContent, user, filename) {
     // Transform records using the dedicated function
     const transformedRecords = normalize2EstimateFormat(records, quoteInfo);
 
-    // Count lines and calculate savings
-    const lineCount = countOutputLines(transformedRecords);
-    const timeSaved = calculateTimeSavings(lineCount);
+    // Count lines via Express API
+    const countResp = await axios.post("http://localhost:3000/count-output-lines", {
+      records: transformedRecords
+    });
+    const lineCount = countResp.data.result;
+    
+    const response = await axios.post("http://localhost:3000/calc-time-savings", {
+      lineCount: lineCount
+    });
+    const timeSaved = response.data.result;
 
     // Convert to XLSX using the imported function
     const buffer = convertToXLSXOutput(transformedRecords, quoteInfo);
