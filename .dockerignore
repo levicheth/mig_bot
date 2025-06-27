@@ -1,7 +1,6 @@
 # Development
 .git
 .gitignore
-.env
 .env.local
 *.md
 .vscode
