@@ -1,6 +1,0 @@
-{
-  "build": {
-    "builder": "NIXPACKS"
-  },
-  "start": "concurrently \"node index.js\" \"node api_server.js\""
-}

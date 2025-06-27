@@ -12,6 +12,6 @@ app.use(bodyParser.json());
 app.use("/", quoteRouter);
 
 console.log("[api] Starting Express gateway...");
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
