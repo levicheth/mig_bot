@@ -7,3 +7,8 @@
 - run bot
 
 node index.js
+
+#
+
+docker build -t mig_bot .
+docker run -p 5000:5000 -p 3000:3000 -p 3333:3333 mig_bot

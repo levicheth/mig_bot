@@ -3,9 +3,6 @@ import os
 import argparse
 import glob
 import shutil
-import io
-import requests
-import tempfile
 
 # File paths
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../../data')
@@ -119,26 +116,31 @@ def create_pivot(input_file, output_file):
 
 # Step 2: Compare SOs with bookings > $25k
 def compare_pivots(vsb, vsb_so_col, vsb_bookings_col, mbr, mbr_so_col, mbr_bookings_col, threshold=25000):
-    """Compares two pivot tables based on a booking threshold."""
-    # Filter SOs above threshold in both
-    vsb_high = vsb[vsb[vsb_bookings_col] > threshold]
+    """Compares pivot tables with MBR as SSoT (Single Source of Truth).
     
-    # Set SO as index for fast lookup in MBR pivot
-    mbr_dict = mbr.set_index(mbr_so_col)[mbr_bookings_col].to_dict()
+    MBR data is the primary source - all SOs with bookings above threshold from MBR are included.
+    VSB data is checked against MBR to see if it's included in the MBR dataset.
+    """
+    # Filter MBR SOs above threshold (MBR is SSoT)
+    mbr_high = mbr[mbr[mbr_bookings_col] > threshold]
+    
+    # Set SO as index for fast lookup in VSB pivot
+    vsb_dict = vsb.set_index(vsb_so_col)[vsb_bookings_col].to_dict()
 
     results = []
-    for _, row in vsb_high.iterrows():
-        so = row[vsb_so_col]
-        vsb_amt = row[vsb_bookings_col]
+    for _, row in mbr_high.iterrows():
+        so = row[mbr_so_col]
+        mbr_amt = row[mbr_bookings_col]
         
-        mbr_amt = mbr_dict.get(so)
+        vsb_amt = vsb_dict.get(so)
         
-        if mbr_amt is None:
-            results.append((so, vsb_amt, None, 'Missing in mbr01pivot'))
+        if vsb_amt is None:
+            results.append((so, None, mbr_amt, 'Missing in VSB'))
         elif abs(vsb_amt - mbr_amt) > 1e-2:  # Allowing for floating point tolerance
             results.append((so, vsb_amt, mbr_amt, 'Amount mismatch'))
         else:
             results.append((so, vsb_amt, mbr_amt, 'Match'))
+    
     return results
 
 def detectFilename(data_dir=None):

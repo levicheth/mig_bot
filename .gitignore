@@ -1,5 +1,5 @@
 # 
-/data/*
+/data/*.csv
 *.pyc
 __pycache__
 
