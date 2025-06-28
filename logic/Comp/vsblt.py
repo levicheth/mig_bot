@@ -3,6 +3,9 @@ import os
 import argparse
 import glob
 import shutil
+import io
+import requests
+import tempfile
 
 # File paths
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../../data')
@@ -232,30 +235,35 @@ def compare_MBR_VSB(input_files=None):
         role_to_path = detectFilename()
         input_files = [role_to_path.get(role) for role in ['DIRECT', 'POS', 'XAAS', 'MANREV', 'CREMEMO', 'MBR']]
         input_files = [f for f in input_files if f]
-    # Map roles to files for flexible logic
+    
+    # Map roles to files for flexible logic - use detectFilename logic for content-based detection
     role_map = {}
+    print("start to detect file type")
     for f in input_files:
-        fname = os.path.basename(f).lower()
-        if 'mbr' in fname:
-            role_map['MBR'] = f
-        else:
-            # Try to detect by content
-            try:
-                df = pd.read_excel(f, nrows=2)
-                if 'Type' in df.columns:
-                    type_val = str(df['Type'].iloc[0]).strip().lower() if len(df) > 0 else ''
-                    if 'direct' in type_val:
-                        role_map['DIRECT'] = f
-                    elif 'pos' in type_val:
-                        role_map['POS'] = f
-                    elif 'xaas' in type_val:
-                        role_map['XAAS'] = f
-                    elif 'manual' in type_val:
-                        role_map['MANREV'] = f
-                    elif 'credit' in type_val or 'memo' in type_val:
-                        role_map['CREMEMO'] = f
-            except Exception:
-                continue
+        try:
+            df = pd.read_excel(f, nrows=2)
+            if 'Type' in df.columns:
+                type_val = str(df['Type'].iloc[0]).strip().lower() if len(df) > 0 else ''
+                if 'direct' in type_val:
+                    role_map['DIRECT'] = f
+                elif 'pos' in type_val:
+                    role_map['POS'] = f
+                elif 'xaas' in type_val:
+                    role_map['XAAS'] = f
+                elif 'manual' in type_val:
+                    role_map['MANREV'] = f
+                elif 'credit' in type_val or 'memo' in type_val:
+                    role_map['CREMEMO'] = f
+            # Check for MBR files by looking for "Bookings Type" column
+            if 'Bookings Type' in df.columns:
+                role_map['MBR'] = f
+            # Also check filename for MBR files as fallback
+            fname = os.path.basename(f).lower()
+            if 'mbr' in fname:
+                role_map['MBR'] = f
+        except Exception as e:
+            print(f"Error reading file {f}: {e}")
+            continue
     # Prepare dataframes for those files that are present
     dfs = {}
     if role_map.get('DIRECT'):

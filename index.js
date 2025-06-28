@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const csv = require('csv');
 
-const { downloadFile, uploadFile, downloadImage } = require('./logic/shared/utils/file-handler.js');
+const { downloadFile, uploadFile } = require('./logic/shared/utils/file-handler.js');
 const { logAudit, STATUS } = require('./logic/shared/audit/audit.js');
 
 const { wflowCCWR2CCW } = require('./logic/R2CCW/ccwr2ccw.js');
@@ -170,7 +170,7 @@ framework.hears(
       console.log("File processed");
 
       // Upload processed file
-      await uploadFile(bot, trigger.message.roomId, processedResult, user);
+      await uploadFile(bot, trigger.message.roomId, processedResult, user, null, "CCWR2CCW");
       
     } catch (error) {
       console.error("Error processing CCWR2CCW:", error);      
@@ -189,12 +189,78 @@ framework.hears(
 
 // Add MbrVsbChk 
 framework.hears(
-  /^Mbr/im,
+  /^mbr/im,
   async (bot, trigger) => {
-    console.log("\n=== MbrVsbChk Processing Start ===");    
-    console.log("\n=== MbrVsbChk just a mock for now - TBC  ===");     
-    console.log("=== MbrVsbChk Processing End ===\n");
-  },  
+    console.log("\n=== Mbr Processing Start ===");    
+    const user = trigger.person.emails[0];
+    try {
+      if (!trigger.message.files || trigger.message.files.length === 0) {
+        logAudit(user, 'Mbr', STATUS.ISSUE, 'No file attached');
+        throw new Error('Please attach a CSV file');
+      }
+
+      // (a) Save input files to local fs
+      const fileUrls = trigger.message.files;
+      console.log('[Mbr] Input file URLs:', fileUrls);
+      
+      // Download all files
+      const fileContents = [];
+      const fileNames = [];
+      for (const fileUrl of fileUrls) {
+        const fileContent = await downloadFile(fileUrl, process.env.BOTTOKEN, user, bot, trigger.message.roomId);
+        fileContents.push(fileContent);
+        fileNames.push(fileUrl.split('/').pop() || 'unknown.csv');
+      }
+      
+      // Save to data directory
+      const dataDir = path.join(__dirname, 'data');
+      const inputPaths = [];
+      for (let i = 0; i < fileContents.length; i++) {
+        const randomName = `file_${Date.now()}_${Math.floor(Math.random()*10000)}.xlsx`;
+        const filePath = path.join(dataDir, randomName);
+        fs.writeFileSync(filePath, fileContents[i]);
+        inputPaths.push(filePath);
+      }
+      console.log('[Mbr] Local file paths:', inputPaths);
+
+      // (b) Process files with FastAPI - using downloaded files
+      console.log('[Mbr] Input files found:', inputPaths);
+      
+      const axios = require('axios');
+      const apiUrl = process.env.MBR_VSB_API_URL || 'http://127.0.0.1:3333/mbr-vsb-chk-fs';
+      console.log('[Mbr] Calling FastAPI endpoint:', apiUrl);
+      const response = await axios.post(apiUrl, { filepaths: inputPaths });
+      const outputFile = response.data.output_file;
+      console.log('[Mbr] Output file from FastAPI:', outputFile);
+      await bot.say('markdown', `Output file on server: ${outputFile}`);
+
+
+
+      // (c) Read output file and send to user
+      if (outputFile && fs.existsSync(outputFile)) {
+        const outputBuffer = fs.readFileSync(outputFile);
+        
+        // Convert CSV to Excel
+        const XLSX = require('xlsx');
+        const csvContent = outputBuffer.toString('utf8');
+        const workbook = XLSX.read(csvContent, { type: 'string' });
+        const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        
+        await uploadFile(bot, trigger.message.roomId, {
+          buffer: excelBuffer,
+          filename: 'output.xlsx',
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }, user, null, "MbrVsbChk");
+        console.log('[Mbr] Output file sent to user.');
+      } else {
+        throw new Error('Output file not found on server.');
+      }
+    } catch (error) {
+      console.error('Error in Mbr handler:', error);
+      bot.say('markdown', `Error: ${error.message || error}`);
+    }
+    console.log('=== MbrVsbChk Processing End ===\n');
+  }
 );
 
 // Add CNC7Quoter 
