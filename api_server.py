@@ -26,7 +26,16 @@ async def mbr_vsb_chk_fs(payload: dict = Body(...)):
         print("[mbr-vsb-chk-fs] No file paths provided, aborting.")
         return JSONResponse(status_code=400, content={"error": "No file paths provided"})
     # Call compare_MBR_VSB with filepaths
-    output_csv_path = compare_MBR_VSB(filepaths)
+    result_data = compare_MBR_VSB(filepaths)
+
+    # Check for errors returned from the comparison script, e.g., MBR file not found
+    if result_data and 'error' in result_data:
+        print(f"[mbr-vsb-chk-fs] Error from comparison script: {result_data['error']}")
+        return JSONResponse(status_code=400, content=result_data)
+
+    output_csv_path = result_data.get('output_file')
+    sum_missing = result_data.get('sum_missing')
+    count_missing = result_data.get('count_missing')
     # Copy/move output to /tmp/output_<uuid>.csv
     tmp_dir = "/tmp"
     out_uuid = str(uuid.uuid4())
@@ -36,7 +45,11 @@ async def mbr_vsb_chk_fs(payload: dict = Body(...)):
         shutil.copy(output_csv_path, out_path)
         print(f"[mbr-vsb-chk-fs] Output file saved: {out_path}")
         print("[mbr-vsb-chk-fs] === Function end ===")
-        return {"output_file": out_path}
+        return {
+            "output_file": out_path,
+            "sum_missing": sum_missing,
+            "count_missing": count_missing
+        }
     else:
         print("[mbr-vsb-chk-fs] Failed to generate output CSV.")
         print("[mbr-vsb-chk-fs] === Function end ===")

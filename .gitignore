@@ -1,5 +1,6 @@
 # 
 /data/*.csv
+/data/*.xlsx
 *.pyc
 __pycache__
 

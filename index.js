@@ -171,6 +171,7 @@ framework.hears(
 
       // Upload processed file
       await uploadFile(bot, trigger.message.roomId, processedResult, user, null, "CCWR2CCW");
+      logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed OK', processedResult.lineCount, processedResult.quoteInfo);
       
     } catch (error) {
       console.error("Error processing CCWR2CCW:", error);      
@@ -231,10 +232,17 @@ framework.hears(
       console.log('[Mbr] Calling FastAPI endpoint:', apiUrl);
       const response = await axios.post(apiUrl, { filepaths: inputPaths });
       const outputFile = response.data.output_file;
+      const sumMissing = response.data.sum_missing;
+      const countMissing = response.data.count_missing;
       console.log('[Mbr] Output file from FastAPI:', outputFile);
-      await bot.say('markdown', `Output file on server: ${outputFile}`);
 
-
+      let analysisMessage = `Analysis complete.`;
+      if (sumMissing !== undefined && countMissing !== undefined) {
+        analysisMessage += `\n\n---\n` +
+                           `**Sum of Missing VSB Bookings:** $${sumMissing.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+                           `**Count of Missing VSB Deals:** ${countMissing}`;
+      }
+      await bot.say('markdown', analysisMessage);
 
       // (c) Read output file and send to user
       if (outputFile && fs.existsSync(outputFile)) {
@@ -251,13 +259,20 @@ framework.hears(
           filename: 'output.xlsx',
           contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         }, user, null, "MbrVsbChk");
+        logAudit(user, 'MbrVsbChk', STATUS.OK, 'Output file sent to user.');
         console.log('[Mbr] Output file sent to user.');
       } else {
         throw new Error('Output file not found on server.');
       }
     } catch (error) {
-      console.error('Error in Mbr handler:', error);
-      bot.say('markdown', `Error: ${error.message || error}`);
+      // Check for specific error from the API about missing MBR file
+      if (error.response && error.response.data && error.response.data.error === 'MBR file not detected') {
+        bot.say('markdown', `**Error:** MBR file not detected. Please make sure to include a valid MBR report.`);
+      } else {
+        // Handle all other errors generically
+        console.error('Error in Mbr handler:', error);
+        bot.say('markdown', `An unexpected error occurred: ${error.message || 'Please check the logs.'}`);
+      }
     }
     console.log('=== MbrVsbChk Processing End ===\n');
   }

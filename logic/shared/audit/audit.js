@@ -11,28 +11,31 @@ const STATUS = {
 };
 
 // Create audit log line
-function createAuditLogLine(user, command, status, message, lineCount = 0, quoteInfo = {}) {
+function createAuditLogLine(user, command, status, message, lineCount = 0, auditDetails = {}) {
   const timestamp = new Date().toISOString();
   const requestId = crypto.randomBytes(4).toString('hex').toUpperCase();
-  
-  // Sanitize values to prevent comma issues
-  const sanitizedQuoteInfo = {
-    quoteNumber: (quoteInfo.quoteNumber || '').replace(/,/g, ''),
-    quoteCurrency: (quoteInfo.quoteCurrency || '').replace(/,/g, ''),
-    quotePrice: (quoteInfo.quotePrice || '').replace(/,/g, ''),
-    quoteType: (quoteInfo.quoteType || '').replace(/,/g, '')
-  };
-  
+
+  let quoteType = '';
+  let quoteNumber = '';
+  let quoteCurrency = '';
+  let quotePrice = '';
+
+  if (command === 'CCWR2CCW') {
+    quoteType = (auditDetails.quoteType || '').replace(/,/g, '');
+    quoteNumber = (auditDetails.quoteNumber || '').replace(/,/g, '');
+    quoteCurrency = (auditDetails.quoteCurrency || '').replace(/,/g, '');
+    quotePrice = (auditDetails.quotePrice || '').replace(/,/g, '');
+  }
 
   const logLine = [
     timestamp,
     requestId,
     user,
     command,
-    sanitizedQuoteInfo.quoteType,
-    sanitizedQuoteInfo.quoteNumber,
-    sanitizedQuoteInfo.quoteCurrency,
-    sanitizedQuoteInfo.quotePrice,
+    quoteType,
+    quoteNumber,
+    quoteCurrency,
+    quotePrice,
     status,
     lineCount,
     message
@@ -68,11 +71,11 @@ async function logAuditS3(logLine) {
 }
 
 // Combined logging function
-async function logAudit(user, command, status, message, lineCount = 0, quoteInfo = {}) {
+async function logAudit(user, command, status, message, lineCount = 0, auditDetails = {}) {
   try {
     // Create log line
     const { logLine, requestId } = createAuditLogLine(
-      user, command, status, message, lineCount, quoteInfo
+      user, command, status, message, lineCount, auditDetails
     );
 
     // Log to both destinations

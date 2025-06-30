@@ -72,7 +72,6 @@ async function wflowCCWR2CCW(fileContent, user, filename) {
     
     // Add line count to log with quote info
     logR2CCW(user, filename, `file w ${lineCount} lines generated OK`);
-    logAudit(user, 'CCWR2CCW', STATUS.OK, 'File processed OK', lineCount, quoteInfo);
 
     return {
       buffer,
