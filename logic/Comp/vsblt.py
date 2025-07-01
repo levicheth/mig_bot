@@ -6,15 +6,15 @@ import shutil
 
 # File paths
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../../data')
-DIRECT_FILE = os.path.join(DATA_DIR, 'Goal to Cash Transactions - DIRECT.xlsx')
-POS_FILE = os.path.join(DATA_DIR, 'Goal to Cash Transactions - POS.xlsx')
-XAAS_FILE = os.path.join(DATA_DIR, 'Goal to Cash Transactions XAAS.xlsx')
-VSB_FILE = os.path.join(DATA_DIR, 'vsb01small.xlsx')
-MBR_FILE = os.path.join(DATA_DIR, 'MBR.xlsx')
-VSB_PIVOT_FILE = os.path.join(DATA_DIR, 'vsb01pivot.xlsx')
-MBR_PIVOT_FILE = os.path.join(DATA_DIR, 'mbr01pivot.xlsx')
-CREMEMO_FILE = os.path.join(DATA_DIR, 'Goal to Cash Transactions CREMEMO.xlsx')
-MANREV_FILE = os.path.join(DATA_DIR, 'Goal to Cash Transactions MAN REV.xlsx')
+DIRECT_FILE = None
+POS_FILE = None
+XAAS_FILE = None
+CREMEMO_FILE = None
+MANREV_FILE = None
+MBR_FILE = None
+VSB_FILE = None
+VSB_PIVOT_FILE = None
+MBR_PIVOT_FILE = None
 
 # --- Column Name Configuration ---
 # List of possible column names for Sales Order and Bookings.
@@ -30,80 +30,43 @@ def find_column_name(df_columns, possible_names):
             return name
     return None
 
-def get_mbr_details(filepath):
-    """
-    Checks if a file is an MBR file by looking for specific text in the first cell.
-    Returns a tuple: (is_mbr, rows_to_skip)
-    """
-    try:
-        # Read just the first cell of the file
-        check_df = pd.read_excel(filepath, header=None, nrows=1, usecols=[0])
-        cell_content = str(check_df.iloc[0, 0])
-        
-        if 'SS Bookings 360' in cell_content:
-            return (True, 7) # This is a standard MBR file, skip 7 header rows
-        elif 'Sales Order Number' in cell_content:
-            return (True, 0) # This is a pre-processed MBR file, no rows to skip
-    except Exception as e:
-        # If the check fails, print an error for the user but don't crash
-        print(f"Could not check file {filepath}. Error: {e}")
-    return (False, 0) # Not an MBR file
-
 # Step 0.5: Combine DIRECT, POS, and XAAS files into a new vsb01small.xlsx
-def combine_source_files():
-    """Combines DIRECT, POS, XAAS, MANUAL REVENUE, and CREDIT MEMO source files into a single temp file for comparison."""
-    print("Step 0.5: Combining source files...")
-    # For each file, keep 'Type' as well
-    direct_df = pd.read_excel(DIRECT_FILE)
-    pos_df = pd.read_excel(POS_FILE)
-    xaas_df = pd.read_excel(XAAS_FILE)
-    manrev_df = pd.read_excel(MANREV_FILE)
-    crememo_df = pd.read_excel(CREMEMO_FILE)
-
-    # Find column names dynamically for each file
-    direct_so_col = find_column_name(direct_df.columns, POSSIBLE_SO_COLS)
-    direct_bookings_col = find_column_name(direct_df.columns, POSSIBLE_BOOKINGS_COLS)
-    pos_so_col = find_column_name(pos_df.columns, POSSIBLE_SO_COLS)
-    pos_bookings_col = find_column_name(pos_df.columns, POSSIBLE_BOOKINGS_COLS)
-    xaas_so_col = find_column_name(xaas_df.columns, POSSIBLE_SO_COLS)
-    xaas_bookings_col = find_column_name(xaas_df.columns, POSSIBLE_BOOKINGS_COLS)
-
-    # For MANUAL REVENUE file, use only 'SO Number', 'Revenue (Original)', and 'Type'
-    manrev_df = manrev_df[['SO Number', 'Revenue (Original)', 'Type']].copy()
-    manrev_df.rename(columns={'SO Number': 'SO', 'Revenue (Original)': 'Bookings'}, inplace=True)
-
-    # For CREDIT MEMO file, use 'SO Number' (replace NA/empty with -9999), 'Bookings', and 'Type'
-    crememo_df = crememo_df[['SO Number', 'Bookings', 'Type']].copy()
-    crememo_df['SO'] = crememo_df['SO Number'].fillna(-9999)
-    crememo_df['SO'] = crememo_df['SO'].replace('', -9999)
-    crememo_df.drop(columns=['SO Number'], inplace=True)
-    crememo_df = crememo_df[['SO', 'Bookings', 'Type']]
-
-    # Standardize column names before combining
-    direct_df.rename(columns={direct_so_col: 'SO', direct_bookings_col: 'Bookings'}, inplace=True)
-    pos_df.rename(columns={pos_so_col: 'SO', pos_bookings_col: 'Bookings'}, inplace=True)
-    xaas_df.rename(columns={xaas_so_col: 'SO', xaas_bookings_col: 'Bookings'}, inplace=True)
-    direct_df = direct_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-    pos_df = pos_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-    xaas_df = xaas_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-
-    # Combine all dataframes
-    combined_df = pd.concat([
-        direct_df,
-        pos_df,
-        xaas_df,
-        manrev_df,
-        crememo_df
-    ], ignore_index=True)
-
-    # Save the combined data to be used by the next steps
-    combined_df.to_excel(VSB_FILE, index=False)
-    print(f"Combined data saved to {VSB_FILE}")
+def concat_VSB_files(file_map):
+    """Combines VSB source files into a single temp file for comparison."""
+    print("Step 0.5: Concatenating VSB source files...")
+    dfs = []
+    for key in ['DIRECT', 'POS', 'XAAS', 'MANREV', 'CREMEMO']:
+        f = file_map.get(key)
+        if not f:
+            continue
+        df = pd.read_excel(f)
+        if key == 'MANREV':
+            df = df[['SO Number', 'Revenue (Original)', 'Type']].copy()
+            df.rename(columns={'SO Number': 'SO', 'Revenue (Original)': 'Bookings'}, inplace=True)
+        elif key == 'CREMEMO':
+            df = df[['SO Number', 'Bookings', 'Type']].copy()
+            df['SO'] = df['SO Number'].fillna(-9999)
+            df['SO'] = df['SO'].replace('', -9999)
+            df.drop(columns=['SO Number'], inplace=True)
+            df = df[['SO', 'Bookings', 'Type']]
+        else:
+            so_col = find_column_name(df.columns, POSSIBLE_SO_COLS)
+            bookings_col = find_column_name(df.columns, POSSIBLE_BOOKINGS_COLS)
+            df.rename(columns={so_col: 'SO', bookings_col: 'Bookings'}, inplace=True)
+            if 'Type' not in df.columns:
+                df['Type'] = key
+            df = df.loc[:, ['SO', 'Bookings', 'Type']].copy()
+        dfs.append(df)
+    combined_df = pd.concat(dfs, ignore_index=True)
+    out_path = os.path.join(os.path.dirname(list(file_map.values())[0]), 'vsb-concat.xlsx')
+    combined_df.to_excel(out_path, index=False)
+    print(f"Concatenated data saved to {out_path}")
+    return out_path
 
 # Step 1: Pivot (group by SO, sum Bookings)
-def create_pivot(input_file, output_file, extra_cols=None):
+def create_pivot(input_file, output_file, extra_cols=None, skiprows=0):
     """Reads an Excel file, pivots it, and saves the pivot table."""
-    df = pd.read_excel(input_file)
+    df = pd.read_excel(input_file, skiprows=skiprows)
     
     # Dynamically find the correct column names
     so_col = find_column_name(df.columns, POSSIBLE_SO_COLS)
@@ -183,208 +146,124 @@ def analyseBookingsGap(results_df):
     CountMissingDeals = len(missing_deals_df)
     return SumMissingComp, CountMissingDeals
 
-def detectFilename(data_dir=None):
+def detectFileType(data_dir):
     """
-    Scans the data folder for Excel files, detects their type by filename or by reading the 'Type' column and its value in the second row,
-    and renames them to the canonical file paths used in the script. Returns a dict of role->path for all found files.
+    Detects file type for all Excel files in the directory. Returns a list of dicts: {filename, type}.
+    Types: DIRECT, POS, XAAS, MANREV, CREMEMO, MBR
+    For MBR: if no Type column, check first row, if matches MBR, set type to MBR.
     """
-    if data_dir is None:
-        data_dir = DATA_DIR
-
-    canonical_names = {
-        'DIRECT': 'Goal to Cash Transactions - DIRECT.xlsx',
-        'POS': 'Goal to Cash Transactions - POS.xlsx',
-        'XAAS': 'Goal to Cash Transactions XAAS.xlsx',
-        'MANREV': 'Goal to Cash Transactions MAN REV.xlsx',
-        'CREMEMO': 'Goal to Cash Transactions CREMEMO.xlsx',
-        'MBR': 'MBR.xlsx'
-    }
-
-    def detect_type_from_content(filepath):
-        try:
-            df = pd.read_excel(filepath, nrows=2)
-            if 'Type' not in df.columns:
-                return None
-            type_val = str(df['Type'].iloc[0]).strip().lower() if len(df) > 0 else ''
-            if 'direct' in type_val:
-                return 'DIRECT'
-            if 'pos' in type_val:
-                return 'POS'
-            if 'xaas' in type_val:
-                return 'XAAS'
-            if 'manual' in type_val:
-                return 'MANREV'
-            if 'credit' in type_val or 'memo' in type_val:
-                return 'CREMEMO'
-            return None
-        except Exception:
-            return None
-
+    canonical_types = ['DIRECT', 'POS', 'XAAS', 'MANREV', 'CREMEMO', 'MBR']
     excel_files = glob.glob(os.path.join(data_dir, '*.xlsx'))
-    role_to_path = {}
+    detected = []
     for f in excel_files:
-        fname = os.path.basename(f).lower()
-        if 'mbr' in fname:
-            role = 'MBR'
-        else:
-            role = detect_type_from_content(f)
-        if role and role not in role_to_path:
-            canonical_path = os.path.join(data_dir, canonical_names[role])
-            if os.path.abspath(f) != os.path.abspath(canonical_path):
-                shutil.move(f, canonical_path)
-            role_to_path[role] = canonical_path
-    return role_to_path
-
-def main(data_dir=None):
-    """Main function to execute the pivot and comparison logic."""
-    # --- Step 0: Detect and rename files dynamically ---
-    role_to_path = detectFilename(data_dir=data_dir)
-    if not role_to_path:
-        print("No recognized Excel files found in data folder.")
-        return
-
-    # Create a list of files that were actually found
-    input_files = [f for f in role_to_path.values() if f]
-    if not input_files:
-        print("No valid input files to process.")
-        return
-
-    result_data = compare_MBR_VSB(input_files)
-    
-    output_path = result_data.get('output_file')
-    if output_path and os.path.exists(output_path):
-        print(f"\nComparison complete. Results saved to {output_path}")
-        output_df = pd.read_csv(output_path)
-        print("\n--- Preview of output.csv ---")
-        print(output_df.to_string(index=False))
-        if 'sum_missing' in result_data and 'count_missing' in result_data:
-            print("\n--- Analysis ---")
-            print(f"Sum of Missing VSB Bookings: ${result_data['sum_missing']:,.2f}")
-            print(f"Count of Missing VSB Deals: {result_data['count_missing']}")
-    else:
-        print("No output.csv generated or comparison failed.")
-
-def compare_MBR_VSB(input_files=None):
-    """
-    Accepts a list of Excel file paths (input_files) in the order:
-    [DIRECT, POS, XAAS, MANREV, CREMEMO, MBR] (any subset, order doesn't matter)
-    If input_files is None, auto-detects files in the data folder.
-    Runs the same logic as main(), but only uses the provided files.
-    Returns the path to the generated output.csv.
-    """
-    if input_files is None:
-        role_to_path = detectFilename()
-        input_files = [role_to_path.get(role) for role in ['DIRECT', 'POS', 'XAAS', 'MANREV', 'CREMEMO', 'MBR']]
-        input_files = [f for f in input_files if f]
-    
-    # Map roles to files for flexible logic - use detectFilename logic for content-based detection
-    role_map = {}
-    print("start to detect file type")
-    for f in input_files:
         try:
             df = pd.read_excel(f, nrows=2)
             if 'Type' in df.columns:
                 type_val = str(df['Type'].iloc[0]).strip().lower() if len(df) > 0 else ''
                 if 'direct' in type_val:
-                    role_map['DIRECT'] = f
+                    detected.append({'filename': f, 'type': 'DIRECT'})
                 elif 'pos' in type_val:
-                    role_map['POS'] = f
+                    detected.append({'filename': f, 'type': 'POS'})
                 elif 'xaas' in type_val:
-                    role_map['XAAS'] = f
+                    detected.append({'filename': f, 'type': 'XAAS'})
                 elif 'manual' in type_val:
-                    role_map['MANREV'] = f
+                    detected.append({'filename': f, 'type': 'MANREV'})
                 elif 'credit' in type_val or 'memo' in type_val:
-                    role_map['CREMEMO'] = f
-            # Check for MBR files by looking for "Bookings Type" column
-            if 'Bookings Type' in df.columns:
-                role_map['MBR'] = f
-            # Also check filename for MBR files as fallback
-            fname = os.path.basename(f).lower()
-            if 'mbr' in fname:
-                role_map['MBR'] = f
+                    detected.append({'filename': f, 'type': 'CREMEMO'})
+                else:
+                    # fallback: check filename
+                    fname = os.path.basename(f).lower()
+                    for t in canonical_types:
+                        if t.lower() in fname:
+                            detected.append({'filename': f, 'type': t})
+                            break
+            else:
+                # MBR detection: check first cell
+                check_df = pd.read_excel(f, header=None, nrows=1, usecols=[0])
+                cell_content = str(check_df.iloc[0, 0])
+                if 'SS Bookings 360' in cell_content or 'Sales Order Number' in cell_content:
+                    detected.append({'filename': f, 'type': 'MBR'})
         except Exception as e:
-            print(f"Error reading file {f}: {e}")
-            continue
-    # Prepare dataframes for those files that are present
-    dfs = {}
-    if role_map.get('DIRECT'):
-        direct_df = pd.read_excel(role_map['DIRECT'])
-        direct_so_col = find_column_name(direct_df.columns, POSSIBLE_SO_COLS)
-        direct_bookings_col = find_column_name(direct_df.columns, POSSIBLE_BOOKINGS_COLS)
-        direct_df.rename(columns={direct_so_col: 'SO', direct_bookings_col: 'Bookings'}, inplace=True)
-        if 'Type' in direct_df.columns:
-            direct_df = direct_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-        else:
-            direct_df['Type'] = 'Direct'
-            direct_df = direct_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-        dfs['DIRECT'] = direct_df
-    if role_map.get('POS'):
-        pos_df = pd.read_excel(role_map['POS'])
-        pos_so_col = find_column_name(pos_df.columns, POSSIBLE_SO_COLS)
-        pos_bookings_col = find_column_name(pos_df.columns, POSSIBLE_BOOKINGS_COLS)
-        pos_df.rename(columns={pos_so_col: 'SO', pos_bookings_col: 'Bookings'}, inplace=True)
-        if 'Type' in pos_df.columns:
-            pos_df = pos_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-        else:
-            pos_df['Type'] = 'POS'
-            pos_df = pos_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-        dfs['POS'] = pos_df
-    if role_map.get('XAAS'):
-        xaas_df = pd.read_excel(role_map['XAAS'])
-        xaas_so_col = find_column_name(xaas_df.columns, POSSIBLE_SO_COLS)
-        xaas_bookings_col = find_column_name(xaas_df.columns, POSSIBLE_BOOKINGS_COLS)
-        xaas_df.rename(columns={xaas_so_col: 'SO', xaas_bookings_col: 'Bookings'}, inplace=True)
-        if 'Type' in xaas_df.columns:
-            xaas_df = xaas_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-        else:
-            xaas_df['Type'] = 'XAAS'
-            xaas_df = xaas_df.loc[:, ['SO', 'Bookings', 'Type']].copy()
-        dfs['XAAS'] = xaas_df
-    if role_map.get('MANREV'):
-        manrev_df = pd.read_excel(role_map['MANREV'])
-        manrev_df = manrev_df[['SO Number', 'Revenue (Original)', 'Type']].copy()
-        manrev_df.rename(columns={'SO Number': 'SO', 'Revenue (Original)': 'Bookings'}, inplace=True)
-        dfs['MANREV'] = manrev_df
-    if role_map.get('CREMEMO'):
-        crememo_df = pd.read_excel(role_map['CREMEMO'])
-        crememo_df = crememo_df[['SO Number', 'Bookings', 'Type']].copy()
-        crememo_df['SO'] = crememo_df['SO Number'].fillna(-9999)
-        crememo_df['SO'] = crememo_df['SO'].replace('', -9999)
-        crememo_df.drop(columns=['SO Number'], inplace=True)
-        crememo_df = crememo_df[['SO', 'Bookings', 'Type']]
-        dfs['CREMEMO'] = crememo_df
-    # MBR is special: only used for comparison, not for combining
-    mbr_file = role_map.get('MBR')
-    if not dfs:
+            print(f"Could not detect type for {f}: {e}")
+    return detected
+
+def normalizeFileContent(filepath, criteria=None):
+    """
+    Removes rows from the Excel file where the first column matches any string in criteria (case-insensitive, strip),
+    or is empty. Returns the path to the cleaned file.
+    """
+    if criteria is None:
+        criteria = []
+    df = pd.read_excel(filepath, header=None)
+    # Remove rows where first column is empty or matches any criteria
+    def should_remove(val):
+        if pd.isna(val) or str(val).strip() == '':
+            return True
+        val_str = str(val).strip().lower()
+        for c in criteria:
+            if c.lower() in val_str:
+                return True
+        return False
+    mask = df[0].apply(should_remove)
+    cleaned_df = df[~mask].copy()
+    # Save to a new file
+    cleaned_path = filepath.replace('.xlsx', '_normalized.xlsx')
+    cleaned_df.to_excel(cleaned_path, index=False, header=False)
+    return cleaned_path
+
+def compare_MBR_VSB(filepaths):
+    """
+    Main entry: detects files, concatenates VSB, pivots, compares, outputs CSV.
+    Accepts a list of file paths.
+    """
+    detected = []
+    for f in filepaths:
+        try:
+            df = pd.read_excel(f, nrows=2)
+            if 'Type' in df.columns:
+                type_val = str(df['Type'].iloc[0]).strip().lower() if len(df) > 0 else ''
+                if 'direct' in type_val:
+                    detected.append({'filename': f, 'type': 'DIRECT'})
+                elif 'pos' in type_val:
+                    detected.append({'filename': f, 'type': 'POS'})
+                elif 'xaas' in type_val:
+                    detected.append({'filename': f, 'type': 'XAAS'})
+                elif 'manual revenue' in type_val:
+                    detected.append({'filename': f, 'type': 'MANREV'})
+                elif 'credit/debit memo' in type_val:
+                    detected.append({'filename': f, 'type': 'CREMEMO'})
+            else:
+                check_df = pd.read_excel(f, header=None, nrows=1, usecols=[0])
+                cell_content = str(check_df.iloc[0, 0])
+                if 'SS Bookings 360' in cell_content or 'Sales Order Number' in cell_content:
+                    detected.append({'filename': f, 'type': 'MBR'})
+        except Exception as e:
+            print(f"Could not detect type for {f}: {e}")
+    file_map = {d['type']: d['filename'] for d in detected if 'type' in d}
+    if not any(k in file_map for k in ['DIRECT', 'POS', 'XAAS', 'MANREV', 'CREMEMO']):
         print("No VSB files to process.")
         return None
-    # Combine all available VSB dataframes
-    combined_df = pd.concat([df for k, df in dfs.items() if k != 'MBR'], ignore_index=True)
-    data_dir = os.path.dirname(list(role_map.values())[0])
-    vsb_file = os.path.join(data_dir, 'vsb01small.xlsx')
-    vsb_pivot_file = os.path.join(data_dir, 'vsb01pivot.xlsx')
-    mbr_pivot_file = os.path.join(data_dir, 'mbr01pivot.xlsx')
-    output_csv_path = os.path.join(data_dir, 'output.csv')
-    combined_df.to_excel(vsb_file, index=False)
-    # Step 1: Pivot (group by SO, sum Bookings)
+    vsb_file = concat_VSB_files(file_map)
+    vsb_pivot_file = os.path.join(os.path.dirname(vsb_file), 'vsb-pivot.xlsx')
+    mbr_file = file_map.get('MBR')
+    mbr_pivot_file = os.path.join(os.path.dirname(vsb_file), 'mbr-pivot.xlsx')
+    output_csv_path = os.path.join(os.path.dirname(vsb_file), 'output.csv')
     vsb_pivot, vsb_so_col, vsb_bookings_col = create_pivot(vsb_file, vsb_pivot_file)
     if mbr_file:
-        mbr_pivot, mbr_so_col, mbr_bookings_col = create_pivot(mbr_file, mbr_pivot_file, extra_cols=MBR_EXTRA_COLS)
+        # Normalize MBR file before pivoting
+        normalized_mbr_file = normalizeFileContent(mbr_file, criteria=["grand total", "SS Bookings 360"])
+        mbr_pivot, mbr_so_col, mbr_bookings_col = create_pivot(normalized_mbr_file, mbr_pivot_file, extra_cols=MBR_EXTRA_COLS, skiprows=0)
     else:
         print("No MBR file provided, skipping comparison.")
         return None
-    # Step 2: Compare SOs with bookings > $25k
     comparison = compare_pivots(
         vsb_pivot, vsb_so_col, vsb_bookings_col,
         mbr_pivot, mbr_so_col, mbr_bookings_col,
         extra_cols=MBR_EXTRA_COLS
     )
-    # --- Create and format output CSV ---
     results_df_cols = ['SO#', 'Vsb_Amount', 'MBR_Amount', 'Original_Status'] + MBR_EXTRA_COLS
     results_df = pd.DataFrame(comparison, columns=results_df_cols)
-
     SumMissingComp, CountMissingDeals = analyseBookingsGap(results_df)
-
     results_df['Delta'] = results_df['MBR_Amount'] - results_df['Vsb_Amount']
     results_df['isMatch'] = results_df['Delta'].abs().lt(1000).apply(lambda x: 'yes' if x else 'no')
     if 'Type' in vsb_pivot.columns:
@@ -400,14 +279,12 @@ def compare_MBR_VSB(input_files=None):
     output_cols = ['SO#', 'MBR$', 'Vsb$', 'Delta$', 'isMatch', 'Type'] + MBR_EXTRA_COLS
     output_df = results_df[output_cols]
     output_df.to_csv(output_csv_path, index=False)
-    # Remove temp files
     for f in [vsb_file, vsb_pivot_file, mbr_pivot_file]:
         try:
             if os.path.exists(f):
                 os.remove(f)
         except Exception:
             pass
-    
     return {
         'output_file': output_csv_path,
         'sum_missing': float(SumMissingComp),
@@ -415,43 +292,18 @@ def compare_MBR_VSB(input_files=None):
     }
 
 if __name__ == "__main__":
+    import argparse
+    def get_excel_files_from_dir(data_dir):
+        """Return a list of .xlsx file paths in the given directory."""
+        return glob.glob(os.path.join(data_dir, '*.xlsx'))
     parser = argparse.ArgumentParser(description="Compare VSB and MBR Excel files.")
-    parser.add_argument(
-        '--files', 
-        nargs='*', 
-        help='Run comparison with a specific list of Excel files.'
-    )
-    parser.add_argument(
-        '--data-dir', 
-        help='Path to a directory containing data files for local testing. The script will auto-detect files.'
-    )
-    parser.add_argument(
-        '--mbr-detect',
-        help='Run MBR detection test on a specific file.'
-    )
+    parser.add_argument('--data-dir', help='Path to a directory containing data files for local testing.')
     args = parser.parse_args()
-
-    if args.mbr_detect:
-        filepath = args.mbr_detect
-        is_mbr, rows_to_skip = get_mbr_details(filepath)
-        if is_mbr:
-            print(f"'{filepath}' is detected as an MBR file. Rows to skip: {rows_to_skip}.")
-        else:
-            print(f"'{filepath}' is NOT detected as an MBR file.")
-    elif args.files:
-        result_data = compare_MBR_VSB(args.files)
-        output_path = result_data.get('output_file')
-        if output_path:
-            print(f"Comparison successful. Output at: {output_path}")
-            if 'sum_missing' in result_data and 'count_missing' in result_data:
-                print(f"Sum of Missing VSB Bookings: ${result_data['sum_missing']:,.2f}")
-                print(f"Count of Missing VSB Deals: {result_data['count_missing']}")
-        else:
-            print("Comparison failed or no output generated.")
-    elif args.data_dir:
-        main(data_dir=args.data_dir)
+    if args.data_dir:
+        file_list = get_excel_files_from_dir(args.data_dir)
     else:
-        try:
-            main()  # Production mode: uses default DATA_DIR
-        except (FileNotFoundError, ValueError) as e:
-            print(f"Error: {e}")
+        file_list = get_excel_files_from_dir(DATA_DIR)
+    try:
+        compare_MBR_VSB(file_list)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error: {e}")

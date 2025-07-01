@@ -46,7 +46,7 @@ framework.showHelp = function() {
   let helpText = `Currently implemented services:\n\n` +
   `**ccwr2ccw**: \n` +
   `- export CCWR quote, convert to MDM Quote format\n` +
-  `- demo: https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` 
+  `- demo: https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` +
 
   // `- in CCWR tool, export quote as CSV format; NB. by default it's XLSX format, so you must change it\n` +
   // `- type CCWR2CCW and add the CCWR quote in the same msg\n` +
@@ -54,8 +54,11 @@ framework.showHelp = function() {
   // `- in MDM Quote page, use Import Saved Configuration > BOM Upload > Select > Choose File. Validate\n` +
   // `- validate all lines with Validate button, or hit Edit/Save to validate manually\n` +
   // `- video with Bot demo - https://app.vidcast.io/share/95bd3e28-8da1-4cd9-8a41-b4eab5bca083\n\n` 
-  
-  +
+
+  `**mbr**: mbr <MBR file + Visibility files attached in the same msg>\n` +
+  `- find missing compensation by analysing difference in bookings report between Visibility and MBR tools\n` +
+  `- demo: https://app.vidcast.io/share/ece79379-be86-4384-be77-17f705240863\n\n` +
+
   `**cnc7**: cnc7 cisco | vendor_name | 9901 | <CSV file>\n` +
   `- find Cisco/3rd part devices type for CNC 7.0 quote, or generate CNC 7.0 estimate based on CSV file with device types\n` +
   `- demo: https://app.vidcast.io/share/f4aa609f-8988-4291-a248-d988b6b90023\n\n` ;
@@ -259,7 +262,7 @@ framework.hears(
           filename: 'output.xlsx',
           contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         }, user, null, "MbrVsbChk");
-        logAudit(user, 'MbrVsbChk', STATUS.OK, 'Output file sent to user.');
+        logAudit(user, 'MbrVsbChk', STATUS.OK, 'Output file sent to user.', countMissing, { sumMissing: String(sumMissing) });
         console.log('[Mbr] Output file sent to user.');
       } else {
         throw new Error('Output file not found on server.');

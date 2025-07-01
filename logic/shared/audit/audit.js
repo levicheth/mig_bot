@@ -27,6 +27,13 @@ function createAuditLogLine(user, command, status, message, lineCount = 0, audit
     quotePrice = (auditDetails.quotePrice || '').replace(/,/g, '');
   }
 
+  if (command === 'MbrVsbChk') {
+    quoteType = 'NA';
+    quoteNumber = 'NA';
+    quoteCurrency = 'USD';
+    quotePrice = (auditDetails.sumMissing || '').replace(/,/g, '');
+  }  
+
   const logLine = [
     timestamp,
     requestId,
