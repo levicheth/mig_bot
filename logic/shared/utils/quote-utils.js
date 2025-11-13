@@ -48,6 +48,12 @@ try {
     months += dayDiff / daysInMonth;
     }
     
+    const integerPart = Math.floor(months);
+    // Exception: keep 11, 35, and 59 as-is instead of rounding up
+    if (months > integerPart && [11, 35, 59].includes(integerPart)) {
+    return Math.max(0, integerPart);
+    }
+
     // Round up to nearest integer and ensure non-negative
     return Math.max(0, Math.ceil(months));
     
