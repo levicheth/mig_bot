@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  mig-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mig-bot:latest
+    container_name: mig-bot
+    env_file: .env
+    ports:
+      - "35000:35000"
+      - "33000:33000"
+      - "33333:33333"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

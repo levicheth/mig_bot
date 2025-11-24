@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Environment & ports
-ENV PORT=5000
-EXPOSE 5000
-EXPOSE 3000
-EXPOSE 3333
+ENV PORT=35000
+EXPOSE 35000
+EXPOSE 33000
+EXPOSE 33333
 CMD ["npx", "concurrently", "node index.js", "node api_server.js", "uvicorn api_server:app --host 0.0.0.0 --port 3333"]

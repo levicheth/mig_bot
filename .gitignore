@@ -16,8 +16,7 @@ eng.traineddata
 
 # Environment & secrets
 .env
-.env.local
-.env.*
+venv/
 *.pem
 aws.credentials
 .DS_Store
